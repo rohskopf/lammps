@@ -36,9 +36,11 @@ class PairSpinExchangeBiquadratic : public PairSpin {
   void compute(int, int) override;
   void compute_single_pair(int, double *) override;
 
-  void compute_exchange(int, int, double, double *, double *, double *);
+  double compute_exchange(int, int, double, double *, double *, double *);
   void compute_exchange_mech(int, int, double, double *, double *, double *, double *);
   double compute_energy(int, int, double, double *, double *);
+  
+  double compute_exchange_pair(int,int, double, double *, double *) override;
 
   void write_restart(FILE *) override;
   void read_restart(FILE *) override;

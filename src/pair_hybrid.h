@@ -36,6 +36,7 @@ class PairHybrid : public Pair {
   friend class PairDeprecated;
   friend class Respa;
   friend class Scafacos;
+  friend class ComputeSpinHeatFlux;
 
  public:
   PairHybrid(class LAMMPS *);

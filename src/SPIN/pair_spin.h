@@ -33,6 +33,10 @@ class PairSpin : public Pair {
   void compute(int, int) override {}
   virtual void compute_single_pair(int, double *) {}
 
+  // compute and return pairwise exchange interactions
+
+  virtual double compute_exchange_pair(int, int, double, double *, double *) { return 0.0; }
+
   // storing magnetic energies
 
   int nlocal_max;    // max nlocal (for list size)

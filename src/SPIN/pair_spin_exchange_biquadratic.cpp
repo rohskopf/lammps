@@ -380,7 +380,7 @@ void PairSpinExchangeBiquadratic::compute_single_pair(int ii, double fmi[3])
    compute exchange interaction between spins i and j
 ------------------------------------------------------------------------- */
 
-void PairSpinExchangeBiquadratic::compute_exchange(int i, int j, double rsq,
+double PairSpinExchangeBiquadratic::compute_exchange(int i, int j, double rsq,
     double fmi[3], double spi[3], double spj[3])
 {
   int *type = atom->type;
@@ -405,6 +405,10 @@ void PairSpinExchangeBiquadratic::compute_exchange(int i, int j, double rsq,
   fmi[0] += (Jex*spj[0] + 2.0*Kex*spj[0]*sdots);
   fmi[1] += (Jex*spj[1] + 2.0*Kex*spj[1]*sdots);
   fmi[2] += (Jex*spj[2] + 2.0*Kex*spj[2]*sdots);
+
+  //double energy = -1.0*Jex*sdots - Kex*sdots*sdots;
+
+  return Jex;
 }
 
 /* ----------------------------------------------------------------------
@@ -498,6 +502,49 @@ double PairSpinExchangeBiquadratic::compute_energy(int i, int j, double rsq,
   } else error->all(FLERR,"Illegal option in pair exchange/biquadratic command");
 
   return energy;
+}
+
+/* ----------------------------------------------------------------------
+   compute exchange interaction between spins i and j
+------------------------------------------------------------------------- */
+
+double PairSpinExchangeBiquadratic::compute_exchange_pair(int i, int j, double rsq,
+    double spi[3], double spj[3])
+{
+
+  int *type = atom->type;
+  int itype,jtype;
+  double Jex,Kex,sdots;
+  double r2j,r2k;
+  double energy = 0.0;
+  itype = type[i];
+  jtype = type[j];
+  double dhds;
+
+  double rsq_cut = cut_spin_exchange[itype][jtype]*cut_spin_exchange[itype][jtype];
+  if (rsq < rsq_cut){
+
+    r2j = rsq/J3[itype][jtype]/J3[itype][jtype];
+    r2k = rsq/K3[itype][jtype]/K3[itype][jtype];
+
+    Jex = 4.0*J1_mech[itype][jtype]*r2j;
+    Jex *= (1.0-J2[itype][jtype]*r2j);
+    Jex *= exp(-r2j);
+
+    Kex = 4.0*K1_mech[itype][jtype]*r2k;
+    Kex *= (1.0-K2[itype][jtype]*r2k);
+    Kex *= exp(-r2k);
+
+    dhds = Jex;
+  }
+  else{
+    dhds = 0.0;
+  }
+
+  // most generally, we should return the Hamiltonian derivative dH/ds
+  // for now we just return J
+
+  return dhds;
 }
 
 /* ----------------------------------------------------------------------
