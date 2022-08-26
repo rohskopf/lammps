@@ -214,7 +214,7 @@ void ComputeSpinHeatFlux::compute_vector()
   ilist = spin_pair[0]->list->ilist;
   numneigh = spin_pair[0]->list->numneigh;
   firstneigh = spin_pair[0]->list->firstneigh;
-  printf("inum: %d\n", inum);
+  //printf("inum: %d\n", inum);
 
   double spi[3]; // = {sp[0][0], sp[0][1], sp[0][2]};
   double spj[3]; // = {sp[1][0], sp[1][1], sp[1][2]};
@@ -225,8 +225,13 @@ void ComputeSpinHeatFlux::compute_vector()
 
 
   double crossproduct[3];
+  double dotproduct;
   double delx, dely, delz, rsq;
   double spin_interaction;
+  double heatflux[3];
+  heatflux[0] = 0;
+  heatflux[1] = 0;
+  heatflux[2] = 0;
   for (ii=0; ii < nlocal; ii++){
 
     i = ilist[ii];
@@ -261,6 +266,12 @@ void ComputeSpinHeatFlux::compute_vector()
       spj[2] = sp[j][2];
 
       spin_interaction = spin_pair[0]->compute_exchange_pair(i,j,rsq,spi,spj);
+
+      dotproduct = crossproduct[0]*spj[0] + crossproduct[1]*spj[1] + crossproduct[2]*spj[2];
+
+      heatflux[0] += 0.5*spin_interaction*dotproduct*delx;
+      heatflux[1] += 0.5*spin_interaction*dotproduct*dely;
+      heatflux[2] += 0.5*spin_interaction*dotproduct*delz;
     }
   }
 
@@ -328,6 +339,7 @@ void ComputeSpinHeatFlux::compute_vector()
   // 1st 3 terms are total heat flux
   // 2nd 3 terms are just conductive portion
 
-  double data[6] = {jc[0]+jv[0],jc[1]+jv[1],jc[2]+jv[2],jc[0],jc[1],jc[2]};
+  //double data[6] = {jc[0]+jv[0],jc[1]+jv[1],jc[2]+jv[2],jc[0],jc[1],jc[2]};
+  double data[6] = {heatflux[0], heatflux[1], heatflux[2], jc[0], jc[1], jc[2]};
   MPI_Allreduce(data,vector,6,MPI_DOUBLE,MPI_SUM,world);
 }
