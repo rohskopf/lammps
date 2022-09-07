@@ -232,6 +232,10 @@ void ComputeSpinHeatFlux::compute_vector()
   heatflux[0] = 0;
   heatflux[1] = 0;
   heatflux[2] = 0;
+  double pi = 3.1415926535;
+  double factor = 1.0/(4.0*pi); // this gets multiplied by heat flux
+                                // factor of 1/2 for double counting atoms
+                                // another factor 1/2pi for converting angular momentum
   for (ii=0; ii < nlocal; ii++){
 
     i = ilist[ii];
@@ -269,9 +273,9 @@ void ComputeSpinHeatFlux::compute_vector()
 
       dotproduct = crossproduct[0]*spj[0] + crossproduct[1]*spj[1] + crossproduct[2]*spj[2];
 
-      heatflux[0] += 0.5*spin_interaction*dotproduct*delx;
-      heatflux[1] += 0.5*spin_interaction*dotproduct*dely;
-      heatflux[2] += 0.5*spin_interaction*dotproduct*delz;
+      heatflux[0] += factor*spin_interaction*dotproduct*delx;
+      heatflux[1] += factor*spin_interaction*dotproduct*dely;
+      heatflux[2] += factor*spin_interaction*dotproduct*delz;
     }
   }
 
