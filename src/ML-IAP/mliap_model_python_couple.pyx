@@ -113,6 +113,7 @@ cdef public void MLIAPPY_compute_gradients(MLIAPModelPython * c_model, MLIAPData
 
     # Invoke python model on numpy arrays.
     model(elem_np,desc_np,beta_np,en_np)
+    print(beta_np)
 
     # Get the total energy from the atom energy.
     energy = np.sum(en_np)

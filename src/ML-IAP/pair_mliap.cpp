@@ -90,6 +90,15 @@ void PairMLIAP::compute(int eflag, int vflag)
   ev_init(eflag, vflag);
   data->generate_neighdata(list, eflag, vflag);
 
+  printf("%d\n", data->npairs);
+  for (int i=0; i<data->npairs; i++){
+    printf("-----\n");
+    printf("%d %d %d\n", data->pair_i[i], data->iatoms[i], data->jatoms[i]);
+    printf("%f %f %f\n", data->rij[i][0], data->rij[i][1], data->rij[i][2]);
+    printf("%f\n", atom->x[data->pair_i[i]][0] - atom->x[data->jatoms[i]][0]);
+  }
+  error->all(FLERR, "^^^^^ DEBUG!\n");
+
   // compute descriptors, if needed
 
   if (model->nonlinearflag || eflag) descriptor->compute_descriptors(data);

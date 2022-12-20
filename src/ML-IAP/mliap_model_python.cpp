@@ -137,6 +137,7 @@ void MLIAPModelPython::compute_gradients(MLIAPData *data)
   if (!model_loaded) { error->all(FLERR, "Model not loaded."); }
 
   PyGILState_STATE gstate = PyGILState_Ensure();
+  printf("^^^^^ COMPUTING GRADIENTS\n");
   MLIAPPY_compute_gradients(this, data);
   if (PyErr_Occurred()) {
     PyErr_Print();
