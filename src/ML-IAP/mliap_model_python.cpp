@@ -33,7 +33,7 @@ using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-MLIAPModelPython::MLIAPModelPython(LAMMPS *lmp, char *coefffilename) :
+MLIAPModelPython::MLIAPModelPython(LAMMPS *lmp, char *coefffilename, int flag) :
     MLIAPModel(lmp, coefffilename)
 {
   model_loaded = 0;
@@ -67,6 +67,8 @@ MLIAPModelPython::MLIAPModelPython(LAMMPS *lmp, char *coefffilename) :
   }
   PyGILState_Release(gstate);
 
+  pairnnflag = flag;
+  printf("^^^^^ MLIAPModelPython pairnnflag: %d\n", pairnnflag);
   if (coefffilename) read_coeffs(coefffilename);
 
   nonlinearflag = 1;

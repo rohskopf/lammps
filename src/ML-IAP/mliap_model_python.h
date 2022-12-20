@@ -20,7 +20,7 @@ namespace LAMMPS_NS {
 
 class MLIAPModelPython : public MLIAPModel {
  public:
-  MLIAPModelPython(LAMMPS *, char * = nullptr);
+  MLIAPModelPython(LAMMPS *, char * = nullptr, int = 0);
   ~MLIAPModelPython() override;
   int get_nparams() override;
   int get_gamma_nnz(class MLIAPData *) override;
@@ -37,6 +37,7 @@ class MLIAPModelPython : public MLIAPModel {
   void read_coeffs(char *) override;
 
  private:
+  int pairnnflag; // flag telling whether to use pairwise or atomcentered NNs
 };
 
 }    // namespace LAMMPS_NS

@@ -54,3 +54,34 @@ compilation.
 
 More information on building LAMMPS with this package is
 [here](https://docs.lammps.org/Build_extras.html#mliap).
+
+# Developer notes
+
+This section explains how to add new descriptors and/or models to this package.
+In `pair_mliap.h` we see that `model`, `descriptor`, and `data` are instances
+of the `MLIAPModel`, `MLIAPDescriptor`, and `MLIAPData` classes, respectively.
+These objects are the backbone of `ML-IAP`, and are explained below.
+
+- `MLIAPModel` : Houses model settings.
+- `MLIAPDescriptor` : Houses descriptor settings.
+- `MLIAPData` : Houses LAMMPS quantities that are useful for computing potentials, 
+                such as neighbor lists, geometry, pointers to forces, etc.
+
+`model` and `descriptor` are instantiated in `PairMLIAP::settings`, depending 
+on the choice of model (e.g. `linear`, `quadratic`, `mliappy`, etc.).
+
+When creating a new Python model object, we see that
+
+    model = new MLIAPModelPython(lmp,arg[iarg+2]);
+
+This class is defined in `mliap_model_python.cpp`. When initializing the model 
+here, the constructor calls `MLIAPModelPython::read_coeffs` which reads the 
+PyTorch potential file with
+
+    int loaded = MLIAPPY_load_model(this, fname);
+
+This function is declared in `mliap_model_python_couple.pyx` as
+
+    cdef public int MLIAPPY_load_model(MLIAPModelPython * c_model, char* fname) with gil:
+
+* The `python/mliap/pytorch.py` file doesn't seem to be used at all - it doesn't affect anything!

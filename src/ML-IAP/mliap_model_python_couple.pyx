@@ -13,6 +13,9 @@ from libc.stdint cimport uintptr_t
 
 from libcpp.string cimport string
 
+import sys
+import os
+
 
 cdef extern from "mliap_data.h" namespace "LAMMPS_NS":
     cdef cppclass MLIAPData:
@@ -69,6 +72,8 @@ cdef public int MLIAPPY_load_model(MLIAPModelPython * c_model, char* fname) with
                 model = pickle.load(pfile)
         returnval = 1
     LOADED_MODELS[c_id(c_model)] = model
+    print("^^^^^ MLIAPPY_load_model")
+    print(model)
     return returnval
 
 def load_from_python(model):
@@ -101,6 +106,12 @@ cdef public int MLIAPPY_ndescriptors(MLIAPModelPython * c_model) with gil:
 
 cdef public void MLIAPPY_compute_gradients(MLIAPModelPython * c_model, MLIAPData * data) with gil:
     model = retrieve(c_model)
+
+    print(model)
+    print(sys.executable)
+    python_executable_path = os.environ['_']
+    print(python_executable_path)
+    print(os.__file__)
 
     n_d = data.ndescriptors
     n_a = data.nlistatoms

@@ -90,6 +90,8 @@ void PairMLIAP::compute(int eflag, int vflag)
   ev_init(eflag, vflag);
   data->generate_neighdata(list, eflag, vflag);
 
+  //error->all(FLERR, "^^^^^ DEBUG compute\n");
+  /*
   printf("%d\n", data->npairs);
   for (int i=0; i<data->npairs; i++){
     printf("-----\n");
@@ -97,7 +99,8 @@ void PairMLIAP::compute(int eflag, int vflag)
     printf("%f %f %f\n", data->rij[i][0], data->rij[i][1], data->rij[i][2]);
     printf("%f\n", atom->x[data->pair_i[i]][0] - atom->x[data->jatoms[i]][0]);
   }
-  error->all(FLERR, "^^^^^ DEBUG!\n");
+  */
+  //error->all(FLERR, "^^^^^ DEBUG compute\n");
 
   // compute descriptors, if needed
 
@@ -169,9 +172,15 @@ void PairMLIAP::settings(int narg, char ** arg)
         iarg += 3;
       } else if (strcmp(arg[iarg+1],"mliappy") == 0) {
 #ifdef MLIAP_PYTHON
-        if (iarg+3 > narg) utils::missing_cmd_args(FLERR, "pair_style mliap mliappy", error);
-        model = new MLIAPModelPython(lmp,arg[iarg+2]);
-        iarg += 3;
+        //if (iarg+3 > narg) utils::missing_cmd_args(FLERR, "pair_style mliap mliappy", error);
+        if (iarg+4 > narg) printf("ASDFASDF\n");
+        printf("^^^^^ narg: %d\n", narg);
+        model = new MLIAPModelPython(lmp,arg[iarg+2],atoi(arg[iarg+3]));
+        printf("^^^^^ model: %s\n", arg[iarg+2]);
+        pairnnflag = atoi(arg[iarg+3]);
+        //model->pairnnflag = pairnnflag;
+        printf("^^^^^ pairflag: %d\n", pairnnflag);
+        iarg += 4;
 #else
         error->all(FLERR,"Using pair_style mliap model mliappy requires ML-IAP with python support");
 #endif
@@ -182,6 +191,7 @@ void PairMLIAP::settings(int narg, char ** arg)
       if (strcmp(arg[iarg+1],"sna") == 0) {
         if (iarg+3 > narg) utils::missing_cmd_args(FLERR, "pair_style mliap descriptor sna", error);
         descriptor = new MLIAPDescriptorSNAP(lmp,arg[iarg+2]);
+        printf("^^^^^ descriptor: %s\n", arg[iarg+2]);
         iarg += 3;
       } else if (strcmp(arg[iarg+1],"so3") == 0) {
         if (iarg+3 > narg) utils::missing_cmd_args(FLERR, "pair_style mliap descriptor so3", error);
@@ -270,6 +280,7 @@ void PairMLIAP::coeff(int narg, char **arg)
   delete data;
   data = new MLIAPData(lmp, gradgradflag, map, model, descriptor, this);
   data->init();
+
 }
 
 /* ----------------------------------------------------------------------
