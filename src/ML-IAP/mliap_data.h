@@ -38,6 +38,7 @@ class MLIAPData : protected Pointers {
   double **f;
   double **gradforce;
   double **betas;          // betas for all atoms in list
+  double **betas_rij;       // dE/drij for all pairs on a proc (energy is also of the proc)
   double **descriptors;    // descriptors for all atoms in list
   double *eatoms;          // energies for all atoms in list
   double energy;           // energy
@@ -68,10 +69,12 @@ class MLIAPData : protected Pointers {
   int nneigh_max;                // number of ij neighbors allocated
   int npairs;                    // number of ij neighbor pairs
   int *pair_i;                   // index of each i atom for each ij pair
+  int *tag_i;                    // tag-1 of each i for each ij pair
+  int *tag_j;                    // tag-1 of each j for each ij pair
   int *jatoms;                   // index of each neighbor
   int *jelems;                   // element of each neighbor
   int *elems;                    // element of each atom in or not in the neighborlist
-  double **rij;                  // distance vector of each neighbor, x[pair_i[pairindx]][a] - x[jatoms[pairindx]][a]
+  double **rij;                  // distance vector of each neighbor, -1.0*( x[pair_i[pairindx]][a] - x[jatoms[pairindx]][a] )
   double ***graddesc;            // descriptor gradient w.r.t. each neighbor
   int eflag;                     // indicates if energy is needed
   int vflag;                     // indicates if virial is needed

@@ -36,7 +36,8 @@ MLIAPData::MLIAPData(LAMMPS *lmp, int gradgradflag_in, int *map_in,
   gamma_row_index(nullptr), gamma_col_index(nullptr), egradient(nullptr),
   numneighs(nullptr), iatoms(nullptr), ielems(nullptr), pair_i(nullptr),
   jatoms(nullptr), jelems(nullptr), elems(nullptr), rij(nullptr),
-  graddesc(nullptr), model(nullptr), descriptor(nullptr), list(nullptr)
+  graddesc(nullptr), model(nullptr), descriptor(nullptr), list(nullptr),
+  tag_i(nullptr), tag_j(nullptr), betas_rij(nullptr)
 {
   gradgradflag = gradgradflag_in;
   map = map_in;
@@ -77,6 +78,7 @@ MLIAPData::MLIAPData(LAMMPS *lmp, int gradgradflag_in, int *map_in,
 MLIAPData::~MLIAPData()
 {
   memory->destroy(betas);
+  memory->destroy(betas_rij);
   memory->destroy(descriptors);
   memory->destroy(eatoms);
   memory->destroy(gamma_row_index);
@@ -87,6 +89,8 @@ MLIAPData::~MLIAPData()
 
   memory->destroy(iatoms);
   memory->destroy(pair_i);
+  memory->destroy(tag_i);
+  memory->destroy(tag_j);
   memory->destroy(ielems);
   memory->destroy(numneighs);
   memory->destroy(jatoms);
@@ -117,6 +121,7 @@ void MLIAPData::generate_neighdata(NeighList* list_in, int eflag_in, int vflag_i
   int *ilist = list->ilist;
   int *numneigh = list->numneigh;
   int **firstneigh = list->firstneigh;
+  int *tag = atom->tag;
 
   // grow nmax gradforce, elems arrays if necessary
 
@@ -175,10 +180,16 @@ void MLIAPData::generate_neighdata(NeighList* list_in, int eflag_in, int vflag_i
     int *jlist = firstneigh[i];
     const int jnum = numneigh[i];
 
+    printf("i x: %d %f %f %f\n", tag[i], x[i][0], x[i][1], x[i][2]);
+
+    //printf("^^^^^ i numneigh: %d %d\n", i, jnum);
+
     int ninside = 0;
     for (int jj = 0; jj < jnum; jj++) {
       int j = jlist[jj];
       j &= NEIGHMASK;
+      //printf("^^^^^ itag jtag x: %d %d\n", tag[i], tag[j]);
+      //printf("^^^^^      xi: %f %f %f\n", x[i][0], x[i][1], x[i][2]);
       const double delx = x[j][0] - xtmp;
       const double dely = x[j][1] - ytmp;
       const double delz = x[j][2] - ztmp;
@@ -187,7 +198,10 @@ void MLIAPData::generate_neighdata(NeighList* list_in, int eflag_in, int vflag_i
       const int jelem = map[jtype];
 
       if (rsq < descriptor->cutsq[ielem][jelem]) {
+        printf("^^^^^ itag jtag x: %d %d\n", tag[i]-1, tag[j]-1);
         pair_i[ij] = i;
+        tag_i[ij] = tag[i]-1;
+        tag_j[ij] = tag[j]-1;
         jatoms[ij] = j;
         jelems[ij] = jelem;
         rij[ij][0] = delx;
@@ -202,6 +216,11 @@ void MLIAPData::generate_neighdata(NeighList* list_in, int eflag_in, int vflag_i
     numneighs[ii] = ninside;
     npairs += ninside;
   }
+
+  for (int i=0; i<natoms; i++){
+    printf("itag numneigh: %d %d\n", tag[i]-1, numneighs[i]);
+  }
+  //error->all(FLERR,"^^^^^ mliap data debug\n");
 
   for (int i = 0; i < nall; i++) {
     const int itype = type[i];
@@ -271,6 +290,9 @@ void MLIAPData::grow_neigharrays()
     memory->grow(jatoms,nneigh,"MLIAPData:jatoms");
     memory->grow(jelems,nneigh,"MLIAPData:jelems");
     memory->grow(rij,nneigh,3,"MLIAPData:rij");
+    memory->grow(tag_i,nneigh,"MLIAPData:tag_i");
+    memory->grow(tag_j,nneigh,"MLIAPData:tag_j");
+    memory->grow(betas_rij,nneigh,3,"MLIAPData:betas_rij");
     if (gradgradflag == 0)
       memory->grow(graddesc,nneigh,ndescriptors,3,"MLIAPData:graddesc");
     nneigh_max = nneigh;

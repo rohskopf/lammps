@@ -140,7 +140,12 @@ void MLIAPModelPython::compute_gradients(MLIAPData *data)
 
   PyGILState_STATE gstate = PyGILState_Ensure();
   printf("^^^^^ COMPUTING GRADIENTS\n");
-  MLIAPPY_compute_gradients(this, data);
+  if (!pairnnflag){
+    MLIAPPY_compute_gradients(this, data);
+  }
+  else{
+    MLIAPPY_compute_gradients_pairnn(this, data);
+  }
   if (PyErr_Occurred()) {
     PyErr_Print();
     PyErr_Clear();

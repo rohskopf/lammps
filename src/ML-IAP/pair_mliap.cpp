@@ -79,6 +79,7 @@ void PairMLIAP::compute(int eflag, int vflag)
 
   // consistency checks
 
+  /*
   if (data->ndescriptors != model->ndescriptors)
     error->all(FLERR, "Inconsistent model and descriptor descriptor count: {} vs {}",
                model->ndescriptors, data->ndescriptors);
@@ -86,9 +87,11 @@ void PairMLIAP::compute(int eflag, int vflag)
   if (data->nelements != model->nelements)
     error->all(FLERR, "Inconsistent model and descriptor element count: {} vs {}",
                model->nelements, data->nelements);
+  */
 
   ev_init(eflag, vflag);
   data->generate_neighdata(list, eflag, vflag);
+  printf("^^^^^ pair_mliap.cpp data->npairs: %d\n", data->npairs);
 
   //error->all(FLERR, "^^^^^ DEBUG compute\n");
   /*
@@ -104,11 +107,13 @@ void PairMLIAP::compute(int eflag, int vflag)
 
   // compute descriptors, if needed
 
-  if (model->nonlinearflag || eflag) descriptor->compute_descriptors(data);
+  if (!pairnnflag && (model->nonlinearflag || eflag)) descriptor->compute_descriptors(data);
 
   // compute E_i and beta_i = dE_i/dB_i for all i in list
-
+  //error->all(FLERR, "^^^^^ DEBUG compute\n");
   model->compute_gradients(data);
+
+  //error->all(FLERR, "^^^^^ DEBUG compute\n");
 
   // calculate force contributions beta_i*dB_i/dR_j
 

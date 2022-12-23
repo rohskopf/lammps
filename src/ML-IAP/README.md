@@ -85,3 +85,24 @@ This function is declared in `mliap_model_python_couple.pyx` as
     cdef public int MLIAPPY_load_model(MLIAPModelPython * c_model, char* fname) with gil:
 
 * The `python/mliap/pytorch.py` file doesn't seem to be used at all - it doesn't affect anything!
+* You need to modify the class in `fitsnap3lib/lib/neural_networks/write.py` if you want to change the model.
+
+If using a new variable in your potential, need to add it to `mliap_model_python_couple.pyx` e.g.
+
+    cdef extern from "mliap_data.h" namespace "LAMMPS_NS":
+        cdef cppclass MLIAPData:
+            # Array shapes
+            int nlistatoms
+            int ndescriptors
+            int npairs
+
+            # Input data
+            int * ielems                # types for all atoms in list
+            double ** descriptors       # descriptors for all atoms in list
+            double ** rij               # pairwise distances between all neighbors
+
+            # Output data to write to
+            double ** betas             # betas for all atoms in list
+            double * eatoms             # energy for all atoms in list
+            double energy
+

@@ -121,8 +121,69 @@ void MLIAPDescriptorSNAP::compute_descriptors(class MLIAPData *data)
 
 void MLIAPDescriptorSNAP::compute_forces(class MLIAPData *data)
 {
+
+
+  // this works for calculating force on atom 1 (tag-1 = 0)
+  /*
+  double f0x = 0.0;
+  for (int p=0; p<data->npairs; p++){
+
+    if (data->tag_i[p] == 0){
+      f0x += data->betas_rij[p][0];
+    }
+    else if (data->tag_j[p] == 0){
+      f0x -= data->betas_rij[p][0];
+    }
+
+    //printf("----- p = %d -----\n", p);
+    //printf("tagi tagj: %d %d\n", data->tag_i[p], data->tag_j[p]);
+    //printf("i j: %d %d\n", data->pair_i[p], data->jatoms[p]);
+    //printf("beta_rij: %f %f %f\n", data->betas_rij[p][0], data->betas_rij[p][1], data->betas_rij[p][2]);
+  }
+  printf("%f\n", f0x);
+  */
+
   double fij[3];
   double **f = atom->f;
+  int *tag = atom->tag;
+
+  // currently, best way to do this is loop over all pairs, and assign contribution
+  // to
+  /*
+  Currently, best way to do this is loop over all pairs, and assign contribution
+  to f[i] based on whether i is a central atom or a neighbor. We have indices (not tags) of 
+  atoms i, but our j indices correspond to ghost atoms.
+  We therefore cannot assign forces to atoms j which are in the box, since these 
+  js are ghost.
+  We could loop over all pairs, while finding the atom index j (in the box) associated
+  with a ghost index j. This could be done by comparing tag_j.
+  */
+
+  for (int ii = 0; ii < data->nlistatoms; ii++) {
+    const int i = data->iatoms[ii];
+    const int ielem = data->ielems[ii];
+    int tag_i = tag[i]-1;
+    for (int p=0; p<data->npairs; p++){
+      if (data->tag_i[p] == tag_i){
+        f[i][0] += data->betas_rij[p][0];
+        f[i][1] += data->betas_rij[p][1];
+        f[i][2] += data->betas_rij[p][2];
+      }
+      else if (data->tag_j[p] == tag_i){
+        f[i][0] -= data->betas_rij[p][0];
+        f[i][1] -= data->betas_rij[p][1];
+        f[i][2] -= data->betas_rij[p][2];
+      }
+    }
+  }
+
+  for (int ii=0; ii<data->nlistatoms; ii++){
+    const int i = data->iatoms[ii];
+    printf("itag force: %d %f %f %f\n", tag[i], f[i][0], f[i][1], f[i][2]);
+  }
+
+
+  error->all(FLERR, "^^^^^ DEBUG MLIAPDescriptorSNAP::compute_forces\n");
 
   int ij = 0;
   for (int ii = 0; ii < data->nlistatoms; ii++) {

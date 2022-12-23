@@ -22,13 +22,20 @@ cdef extern from "mliap_data.h" namespace "LAMMPS_NS":
         # Array shapes
         int nlistatoms
         int ndescriptors
+        int npairs
 
         # Input data
         int * ielems                # types for all atoms in list
         double ** descriptors       # descriptors for all atoms in list
+        double ** rij               # pairwise distances between all neighbors
+        int * pair_i                # indices of atoms i in all pairs
+        int * tag_i                 # tag-1 for atoms i in all pairs
+        int * tag_j                 # tag-1 for atoms j in all pairs
+        int * jatoms                # indices of neighbors j
 
         # Output data to write to
         double ** betas             # betas for all atoms in list
+        double ** betas_rij          # dE/drij for all pairs on a proc, where E is also energy on a proc
         double * eatoms             # energy for all atoms in list
         double energy
 
@@ -74,6 +81,7 @@ cdef public int MLIAPPY_load_model(MLIAPModelPython * c_model, char* fname) with
     LOADED_MODELS[c_id(c_model)] = model
     print("^^^^^ MLIAPPY_load_model")
     print(model)
+    print(returnval)
     return returnval
 
 def load_from_python(model):
@@ -125,6 +133,45 @@ cdef public void MLIAPPY_compute_gradients(MLIAPModelPython * c_model, MLIAPData
     # Invoke python model on numpy arrays.
     model(elem_np,desc_np,beta_np,en_np)
     print(beta_np)
+
+    # Get the total energy from the atom energy.
+    energy = np.sum(en_np)
+    data.energy = <double> energy
+    return
+
+cdef public void MLIAPPY_compute_gradients_pairnn(MLIAPModelPython * c_model, MLIAPData * data) with gil:
+    model = retrieve(c_model)
+
+    print(model)
+    print("^^^^^ MLIAPPY_compute_gradients_pairnn")
+
+    n_d = data.ndescriptors
+    n_a = data.nlistatoms
+    n_pairs = data.npairs
+    n_dim = 3
+
+    # Make numpy arrays from pointers
+    # NOTE: To add an array here from MLIAPData, need to declare it in `ppclass MLIAPData` above.
+
+    #beta_np = np.asarray(<double[:n_a,:n_d] > &data.betas[0][0])
+    beta_rij_np = np.asarray(<double[:n_pairs,:n_dim] > &data.betas_rij[0][0])
+    desc_np = np.asarray(<double[:n_a,:n_d]> &data.descriptors[0][0])
+    elem_np = np.asarray(<int[:n_a]> &data.ielems[0])
+    en_np = np.asarray(<double[:n_a]> &data.eatoms[0])
+    rij_np = np.asarray(<double[:n_pairs,:n_dim] > &data.rij[0][0])
+    pair_i_np = np.asarray(<int[:n_pairs]> &data.pair_i[0])
+    jatoms_np = np.asarray(<int[:n_pairs]> &data.jatoms[0])
+    tag_i_np = np.asarray(<int[:n_pairs]> &data.tag_i[0])
+    tag_j_np = np.asarray(<int[:n_pairs]> &data.tag_j[0])
+
+    print("rij:")
+    print(rij_np)
+
+    # Invoke python model on numpy arrays.
+    model(elem_np, desc_np, beta_rij_np, en_np, rij_np, pair_i_np, jatoms_np, tag_i_np, tag_j_np)
+    print(beta_rij_np)
+
+    #assert(False)
 
     # Get the total energy from the atom energy.
     energy = np.sum(en_np)
