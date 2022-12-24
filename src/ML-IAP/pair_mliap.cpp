@@ -20,6 +20,7 @@
 
 #include "mliap_data.h"
 #include "mliap_descriptor_snap.h"
+#include "mliap_descriptor_fitsnap.h"
 #include "mliap_descriptor_so3.h"
 #include "mliap_model_linear.h"
 #include "mliap_model_nn.h"
@@ -201,6 +202,10 @@ void PairMLIAP::settings(int narg, char ** arg)
       } else if (strcmp(arg[iarg+1],"so3") == 0) {
         if (iarg+3 > narg) utils::missing_cmd_args(FLERR, "pair_style mliap descriptor so3", error);
         descriptor = new MLIAPDescriptorSO3(lmp,arg[iarg+2]);
+        iarg += 3;
+      } else if (strcmp(arg[iarg+1],"fitsnap") == 0) {
+        if (iarg+3 > narg) utils::missing_cmd_args(FLERR, "pair_style mliap descriptor fitsnap", error);
+        descriptor = new MLIAPDescriptorFitSNAP(lmp,arg[iarg+2]);
         iarg += 3;
 
       } else error->all(FLERR,"Illegal pair_style mliap command");

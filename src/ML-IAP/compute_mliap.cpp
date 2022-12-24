@@ -22,6 +22,7 @@
 #include "mliap_model_linear.h"
 #include "mliap_model_quadratic.h"
 #include "mliap_descriptor_snap.h"
+#include "mliap_descriptor_fitsnap.h"
 #include "mliap_descriptor_so3.h"
 #ifdef MLIAP_PYTHON
 #include "mliap_model_python.h"

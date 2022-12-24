@@ -106,3 +106,9 @@ If using a new variable in your potential, need to add it to `mliap_model_python
             double * eatoms             # energy for all atoms in list
             double energy
 
+### Adding a new descriptor file
+
+Simply make a new file `mliap_descriptor_mydescriptor.cpp` and the corresponding header, following 
+the format of existing files. If building using cmake, you must re-build your makefile with cmake
+after creating the new descriptor file, else it will not be compiled and linked into the final 
+executable.
