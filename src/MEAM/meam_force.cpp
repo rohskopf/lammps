@@ -138,6 +138,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
         rhoa3i = ro0i * MathSpecial::fm_exp(-this->beta3_meam[elti] * ai);
         drhoa3i = -this->beta3_meam[elti] * invrei * rhoa3i;
 
+        /*
         if (this->msmeamflag){
           rhoa1mi = ro0i * MathSpecial::fm_exp(-this->beta1m_meam[elti] * ai) * t1m_meam[elti];
           drhoa1mi = -this->beta1m_meam[elti] * invrei * rhoa1mi;
@@ -146,6 +147,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
           rhoa3mi = ro0i * MathSpecial::fm_exp(-this->beta3m_meam[elti] * ai) * t3m_meam[elti];
           drhoa3mi = -this->beta3m_meam[elti] * invrei * rhoa3mi;
         }
+        */
 
         if (elti != eltj) {
           invrej = 1.0 / this->re_meam[eltj][eltj];
@@ -160,6 +162,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
           rhoa3j = ro0j * MathSpecial::fm_exp(-this->beta3_meam[eltj] * aj);
           drhoa3j = -this->beta3_meam[eltj] * invrej * rhoa3j;
 
+          /*
           if (this->msmeamflag) {
             rhoa1mj = ro0j * t1m_meam[eltj] * MathSpecial::fm_exp(-this->beta1m_meam[eltj] * aj);
             drhoa1mj = -this->beta1m_meam[eltj] * invrej * rhoa1mj;
@@ -168,8 +171,8 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
             rhoa3mj = ro0j * t3m_meam[eltj] * MathSpecial::fm_exp(-this->beta3m_meam[eltj] * aj);
             drhoa3mj = -this->beta3m_meam[eltj] * invrej * rhoa3mj;
           }
-
-          } else {
+          */
+          //} else {
             rhoa0j = rhoa0i;
             drhoa0j = drhoa0i;
             rhoa1j = rhoa1i;
@@ -178,7 +181,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
             drhoa2j = drhoa2i;
             rhoa3j = rhoa3i;
             drhoa3j = drhoa3i;
-
+/*
             if (this->msmeamflag) {
               rhoa1mj = rhoa1mi;
               drhoa1mj = drhoa1mi;
@@ -187,7 +190,8 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
               rhoa3mj = rhoa3mi;
               drhoa3mj = drhoa3mi;
             }
-              }
+*/
+              //}
 
         const double t1mi = this->t1_meam[elti];
         const double t2mi = this->t2_meam[elti];
@@ -199,7 +203,8 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
         // ialloy mod not needed in MS-MEAM, but similarity here is that we multply rhos by t.
         // We did this above with rhoa1mj, rhoa2mj, etc.
 
-        if (this->ialloy == 1 || this->msmeamflag) {
+        //if (this->ialloy == 1 || this->msmeamflag) {
+        if (this->ialloy == 1) {
           rhoa1j  *= t1mj;
           rhoa2j  *= t2mj;
           rhoa3j  *= t3mj;
@@ -244,7 +249,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
         }
 
         // msmeam arhom args
-
+        /*
         nv2 = 0;
         nv3 = 0;
         arg1i1m = 0.0;
@@ -275,7 +280,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
             arg3j3m = arg3j3m + arho3mb[j][n] * delij[n];
           }
         }
-
+        */
         //     rho0 terms
         drho0dr1 = drhoa0j * sij;
         drho0dr2 = drhoa0i * sij;
@@ -330,6 +335,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
           drho3drm2[m] = (-a3 * drho3drm2[m] + a3a * arho3b[j][m]) * rhoa3i;
         }
 
+        /*
         if (this->msmeamflag) {
           //     rho1m terms
           a1 = 2 * sij / rij;
@@ -385,7 +391,9 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
             drho3mdrm1[m] = (a3 * drho3mdrm1[m] - a3a * arho3mb[i][m]) * rhoa3mj;
             drho3mdrm2[m] = (-a3 * drho3mdrm2[m] + a3a * arho3mb[j][m]) * rhoa3mi;
           }
-        } else {
+        } 
+        
+        else {
           drho1mdrm1[m] = 0.0;
           drho1mdrm2[m] = 0.0;
           drho2mdrm1[m] = 0.0;
@@ -393,10 +401,11 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
           drho3mdrm1[m] = 0.0;
           drho3mdrm2[m] = 0.0;
         }
+*/
 
         // compute derivatives of weighting functions t wrt rij
         // weighting functions t set to unity for MS-MEAM
-
+        /*
         if (this->msmeamflag) {
 
           t1i = 1.0;
@@ -412,7 +421,9 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
           dt3dr1 = 0.0;
           dt3dr2 = 0.0;
 
-        } else {
+        } 
+        */
+        //else {
 
           t1i = t_ave[i][0];
           t2i = t_ave[i][1];
@@ -463,12 +474,12 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
             dt3dr2 = aj * (t3mi - t3j);
           }
 
-        }
+        //}
 
         //     Compute derivatives of total density wrt rij, sij and rij(3)
         get_shpfcn(this->lattce_meam[elti][elti], this->stheta_meam[elti][elti], this->ctheta_meam[elti][elti], shpi);
         get_shpfcn(this->lattce_meam[eltj][eltj], this->stheta_meam[elti][elti], this->ctheta_meam[elti][elti], shpj);
-
+        /*
         if (this->msmeamflag){
           drhodr1 = dgamma1[i] * drho0dr1 +
                     dgamma2[i] * (dt1dr1 * rho1[i] + t1i * (drho1dr1 - drho1mdr1) +
@@ -490,7 +501,9 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
                                         t2j * (drho2drm2[m] - drho2mdrm2[m]) +
                                         t3j * (drho3drm2[m] - drho3mdrm2[m]) );
           }
-        } else{
+        } 
+        */
+        //else{
 
           drhodr1 = dgamma1[i] * drho0dr1 +
             dgamma2[i] * (dt1dr1 * rho1[i] + t1i * drho1dr1 + dt2dr1 * rho2[i] + t2i * drho2dr1 +
@@ -506,7 +519,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
             drhodrm1[m] = dgamma2[i] * (t1i * drho1drm1[m] + t2i * drho2drm1[m] + t3i * drho3drm1[m]);
             drhodrm2[m] = dgamma2[j] * (t1j * drho1drm2[m] + t2j * drho2drm2[m] + t3j * drho3drm2[m]);
           }
-        }
+        //}
 
         //     Compute derivatives wrt sij, but only if necessary
         if (!iszero(dscrfcn[fnoffset + jn])) {
@@ -523,7 +536,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
           drho2ds2 = a2 * rhoa2i * arg1j2 - 2.0 / 3.0 * arho2b[j] * rhoa2i;
           drho3ds1 = a3 * rhoa3j * arg1i3 - a3a * rhoa3j * arg3i3;
           drho3ds2 = a3 * rhoa3i * arg1j3 - a3a * rhoa3i * arg3j3;
-
+          /*
           if (this->msmeamflag) {
             drho1mds1 = a1 * rhoa1mj * arg1i1m;
             drho1mds2 = a1 * rhoa1mi * arg1j1m;
@@ -533,7 +546,9 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
             drho3mds2 = a3 * rhoa3mi * arg1j3m - a3a * rhoa3mi * arg3j3m;
             drho3mds1 *= -1;
             drho3mds2 *= -1;
-          } else {
+          } 
+          
+          else {
             drho1mds1 = 0.0;
             drho1mds2 = 0.0;
             drho2mds1 = 0.0;
@@ -541,6 +556,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
             drho3mds1 = 0.0;
             drho3mds2 = 0.0;
           }
+          */
 
           if (this->ialloy == 1) {
 
@@ -583,7 +599,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
             dt3ds1 = ai * (t3mj - t3i);
             dt3ds2 = aj * (t3mi - t3j);
           }
-
+          /*
           if (this->msmeamflag){
             drhods1 = dgamma1[i] * drho0ds1 +
               dgamma2[i] * (dt1ds1 * rho1[i] + t1i * (drho1ds1 - drho1mds1) +
@@ -596,7 +612,8 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
                             dt3ds2 * rho3[j] + t3j * (drho3ds2 - drho3mds2)) -
               dgamma3[j] * (shpj[0] * dt1ds2 + shpj[1] * dt2ds2 + shpj[2] * dt3ds2);
           }
-          else{
+          */
+          //else{
             drhods1 = dgamma1[i] * drho0ds1 +
               dgamma2[i] * (dt1ds1 * rho1[i] + t1i * drho1ds1 + dt2ds1 * rho2[i] + t2i * drho2ds1 +
                             dt3ds1 * rho3[i] + t3i * drho3ds1) -
@@ -605,7 +622,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
               dgamma2[j] * (dt1ds2 * rho1[j] + t1j * drho1ds2 + dt2ds2 * rho2[j] + t2j * drho2ds2 +
                             dt3ds2 * rho3[j] + t3j * drho3ds2) -
               dgamma3[j] * (shpj[0] * dt1ds2 + shpj[1] * dt2ds2 + shpj[2] * dt3ds2);
-          }
+          //}
         }
 
         // Compute derivatives of energy wrt rij, sij and rij[3]
@@ -767,4 +784,6 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
     }
     //     end of j loop
   }
+}
+
 }
