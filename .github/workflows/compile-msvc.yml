@@ -4,7 +4,7 @@ name: "Native Windows Compilation and Unit Tests"
 on:
   push:
     branches:
-      - develop
+      - msmeam-adr-testing-2
   pull_request:
     branches:
       - develop
@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     name: Windows Compilation Test
-    if: ${{ github.repository == 'lammps/lammps' }}
+    if: ${{ github.repository == 'rohskopf/lammps' }}
     runs-on: windows-latest
 
     steps:
