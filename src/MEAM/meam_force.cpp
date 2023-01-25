@@ -191,7 +191,7 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
               drhoa3mj = drhoa3mi;
             }
 */
-              //}
+              }
 
         const double t1mi = this->t1_meam[elti];
         const double t2mi = this->t2_meam[elti];
@@ -784,6 +784,4 @@ MEAM::meam_force(int i, int eflag_global, int eflag_atom, int vflag_global, int 
     }
     //     end of j loop
   }
-}
-
 }
