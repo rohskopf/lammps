@@ -4,7 +4,6 @@ name: "Native Windows Compilation and Unit Tests"
 on:
   push:
     branches:
-      - develop
       - msmeam-adr-testing
   pull_request:
     branches:
@@ -46,13 +45,11 @@ jobs:
               -D LAMMPS_EXCEPTIONS=on \
               -D ENABLE_TESTING=on
         cmake --build build --config Release
-
     - name: Run LAMMPS executable
       shell: bash
       run: |
         ./build/Release/lmp.exe -h
         ./build/Release/lmp.exe -in bench/in.lj
-
     - name: Run Unit Tests
       working-directory: build
       shell: bash
