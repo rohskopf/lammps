@@ -47,7 +47,7 @@ jobs:
         #cmake -C cmake/presets/windows.cmake \
         #      -S cmake -B build \
         #      -D ENABLE_TESTING=on
-        #cmake --build build --config Release
+        cmake --build build --config Release
 
     - name: Run LAMMPS executable
       shell: bash
