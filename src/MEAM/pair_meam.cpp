@@ -61,6 +61,9 @@ PairMEAM::PairMEAM(LAMMPS *lmp) : Pair(lmp)
   nlibelements = 0;
   meam_inst = new MEAM(memory);
   scale = nullptr;
+
+  comm_forward = 38;
+  comm_reverse = 30;
 }
 
 /* ----------------------------------------------------------------------
@@ -187,7 +190,7 @@ void PairMEAM::settings(int narg, char **arg)
 
   meam_inst->msmeamflag = 0;
 
-  if (narg == 1){
+  if (narg == 1) {
     if (strcmp("ms", arg[0]) == 0){
         msmeamflag = 1;
         meam_inst->msmeamflag = 1;
@@ -197,13 +200,10 @@ void PairMEAM::settings(int narg, char **arg)
 
   // set comm size needed by this Pair
 
-  if (msmeamflag){
+  if (msmeamflag) {
     comm_forward = 38+23; // plus 23 for msmeam
     comm_reverse = 30+23; // plus 23 for msmeam
-  } else{
-    comm_forward = 38;
-    comm_reverse = 30;
-  }
+  } 
 }
 
 /* ----------------------------------------------------------------------
@@ -395,12 +395,14 @@ void PairMEAM::read_global_meam_file(const std::string &globalfile)
 
   // allocate 6 extra arrays for msmeam
 
-  std::vector<double> b1m(nlibelements);
-  std::vector<double> b2m(nlibelements);
-  std::vector<double> b3m(nlibelements);
-  std::vector<double> t1m(nlibelements);
-  std::vector<double> t2m(nlibelements);
-  std::vector<double> t3m(nlibelements);
+  if (msmeamflag){
+    std::vector<double> b1m(nlibelements);
+    std::vector<double> b2m(nlibelements);
+    std::vector<double> b3m(nlibelements);
+    std::vector<double> t1m(nlibelements);
+    std::vector<double> t2m(nlibelements);
+    std::vector<double> t3m(nlibelements);
+  }
 
   // open global meamf file on proc 0
 
@@ -516,12 +518,14 @@ void PairMEAM::read_global_meam_file(const std::string &globalfile)
   MPI_Bcast(t3.data(), nlibelements, MPI_DOUBLE, 0, world);
   MPI_Bcast(rozero.data(), nlibelements, MPI_DOUBLE, 0, world);
   // distribute msmeam parameter sets
-  MPI_Bcast(b1m.data(), nlibelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(b2m.data(), nlibelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(b3m.data(), nlibelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(t1m.data(), nlibelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(t2m.data(), nlibelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(t3m.data(), nlibelements, MPI_DOUBLE, 0, world);
+  if (msmeamflag){
+    MPI_Bcast(b1m.data(), nlibelements, MPI_DOUBLE, 0, world);
+    MPI_Bcast(b2m.data(), nlibelements, MPI_DOUBLE, 0, world);
+    MPI_Bcast(b3m.data(), nlibelements, MPI_DOUBLE, 0, world);
+    MPI_Bcast(t1m.data(), nlibelements, MPI_DOUBLE, 0, world);
+    MPI_Bcast(t2m.data(), nlibelements, MPI_DOUBLE, 0, world);
+    MPI_Bcast(t3m.data(), nlibelements, MPI_DOUBLE, 0, world);
+  }
 
   // pass element parameters to MEAM package
 
