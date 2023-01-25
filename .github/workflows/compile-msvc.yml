@@ -15,7 +15,7 @@ on:
 jobs:
   build:
     name: Windows Compilation Test
-    if: ${{ github.repository == 'lammps/lammps' }}
+    if: ${{ github.repository == 'rohskopf/lammps' }}
     runs-on: windows-latest
 
     steps:
