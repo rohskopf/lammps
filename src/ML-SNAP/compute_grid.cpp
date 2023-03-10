@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/ Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -13,14 +13,10 @@
 
 #include "compute_grid.h"
 
-#include "atom.h"
 #include "comm.h"
 #include "domain.h"
 #include "error.h"
-#include "force.h"
 #include "memory.h"
-#include "modify.h"
-#include "update.h"
 
 #include <cstring>
 
@@ -190,7 +186,7 @@ void ComputeGrid::set_grid_local()
   // ixyz lo/hi = inclusive lo/hi bounds of global grid sub-brick I own
   // if proc owns no grid cells in a dim, then ilo > ihi
   // if 2 procs share a boundary a grid point is exactly on,
-  //   the 2 equality if tests insure a consistent decision
+  //   the 2 equality if tests ensure a consistent decision
   //   as to which proc owns it
 
   double xfraclo, xfrachi, yfraclo, yfrachi, zfraclo, zfrachi;
@@ -235,8 +231,8 @@ void ComputeGrid::set_grid_local()
 
 double ComputeGrid::memory_usage()
 {
-  double nbytes = size_array_rows * size_array_cols * sizeof(double);    // grid
-  nbytes += size_array_rows * size_array_cols * sizeof(double);          // gridall
-  nbytes += size_array_cols * ngridlocal * sizeof(double);               // gridlocal
+  double nbytes = (double) size_array_rows * size_array_cols * sizeof(double);    // grid
+  nbytes += (double) size_array_rows * size_array_cols * sizeof(double);          // gridall
+  nbytes += (double) size_array_cols * ngridlocal * sizeof(double);               // gridlocal
   return nbytes;
 }

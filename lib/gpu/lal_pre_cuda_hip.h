@@ -30,7 +30,7 @@
 // -------------------------------------------------------------------------
 
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__) || defined(__HIP_PLATFORM_SPIRV__)
 #define CONFIG_ID 303
 #define SIMD_SIZE 64
 #else
@@ -112,7 +112,7 @@
 //                         KERNEL MACROS - TEXTURES
 // -------------------------------------------------------------------------
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__) || defined(__HIP_PLATFORM_SPIRV__)
 #define _texture(name, type)  __device__ type* name
 #define _texture_2d(name, type)  __device__ type* name
 #else
@@ -134,9 +134,12 @@
     int2 qt = tex1Dfetch(q_tex,i);                       \
     ans=__hiloint2double(qt.y, qt.x);                    \
   }
+  #elif  defined(__HIP_PLATFORM_SPIRV__)
+      #define fetch4(ans,i,pos_tex) tex1Dfetch(&ans, pos_tex, i);
+      #define fetch(ans,i,q_tex) tex1Dfetch(&ans, q_tex,i);
   #else
-  #define fetch4(ans,i,pos_tex) ans=tex1Dfetch(pos_tex, i);
-  #define fetch(ans,i,q_tex) ans=tex1Dfetch(q_tex,i);
+    #define fetch4(ans,i,pos_tex) ans=tex1Dfetch(pos_tex, i);
+    #define fetch(ans,i,q_tex) ans=tex1Dfetch(q_tex,i);
   #endif
 #else
   #define fetch4(ans,i,x) ans=x[i]
@@ -152,7 +155,7 @@
   #define mu_tex mu_
 #endif
 
-#if defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__)
+#if defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__) || defined(__HIP_PLATFORM_SPIRV__)
 
 #undef fetch4
 #undef fetch
@@ -179,12 +182,15 @@
 #define ucl_cbrt cbrt
 #define ucl_ceil ceil
 #define ucl_abs fabs
+#define ucl_recip(x) ((numtyp)1.0/(x))
 #define ucl_rsqrt rsqrt
 #define ucl_sqrt sqrt
-#define ucl_recip(x) ((numtyp)1.0/(x))
+#define ucl_erfc erfc
 
 #else
 
+#define ucl_exp expf
+#define ucl_powr powf
 #define ucl_atan atanf
 #define ucl_cbrt cbrtf
 #define ucl_ceil ceilf
@@ -192,8 +198,7 @@
 #define ucl_recip(x) ((numtyp)1.0/(x))
 #define ucl_rsqrt rsqrtf
 #define ucl_sqrt sqrtf
-#define ucl_exp expf
-#define ucl_powr powf
+#define ucl_erfc erfcf
 
 #endif
 
@@ -209,7 +214,7 @@
 #endif
 #endif
 
-#if defined(CUDA_PRE_NINE) || defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__)
+#if defined(CUDA_PRE_NINE) || defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__) || defined(__HIP_PLATFORM_SPIRV__)
 
   #ifdef _SINGLE_SINGLE
     #define shfl_down __shfl_down

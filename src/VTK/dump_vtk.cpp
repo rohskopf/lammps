@@ -2,7 +2,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -31,7 +31,7 @@
 #include "domain.h"
 #include "error.h"
 #include "fix.h"
-#include "fix_store.h"
+#include "fix_store_peratom.h"
 #include "force.h"
 #include "group.h"
 #include "input.h"
@@ -334,13 +334,15 @@ int DumpVTK::count()
 
   // un-choose if not in region
 
-  auto region = domain->get_region_by_id(idregion);
-  if (region) {
-    region->prematch();
-    double **x = atom->x;
-    for (i = 0; i < nlocal; i++)
-      if (choose[i] && region->match(x[i][0],x[i][1],x[i][2]) == 0)
-        choose[i] = 0;
+  if (idregion) {
+    auto region = domain->get_region_by_id(idregion);
+    if (region) {
+      region->prematch();
+      double **x = atom->x;
+      for (i = 0; i < nlocal; i++)
+        if (choose[i] && region->match(x[i][0],x[i][1],x[i][2]) == 0)
+          choose[i] = 0;
+    }
   }
 
   // un-choose if any threshold criterion isn't met
@@ -925,8 +927,8 @@ void DumpVTK::write()
 
   if (filewriter) write_header(nheader);
 
-  // insure buf is sized for packing and communicating
-  // use nmax to insure filewriter proc can receive info from others
+  // ensure buf is sized for packing and communicating
+  // use nmax to ensure filewriter proc can receive info from others
   // limit nmax*size_one to int since used as arg in MPI calls
 
   if (nmax > maxbuf) {
@@ -937,7 +939,7 @@ void DumpVTK::write()
     memory->create(buf,maxbuf*size_one,"dump:buf");
   }
 
-  // insure ids buffer is sized for sorting
+  // ensure ids buffer is sized for sorting
 
   if (sort_flag && sortcol == 0 && nmax > maxids) {
     maxids = nmax;
@@ -2355,16 +2357,16 @@ int DumpVTK::modify_param(int narg, char **arg)
       thresh_value[nthresh] = utils::numeric(FLERR,arg[3],false,lmp);
       thresh_last[nthresh] = -1;
     } else {
-      thresh_fix = (FixStore **)
-        memory->srealloc(thresh_fix,(nthreshlast+1)*sizeof(FixStore *),"dump:thresh_fix");
+      thresh_fix = (FixStorePeratom **)
+        memory->srealloc(thresh_fix,(nthreshlast+1)*sizeof(FixStorePeratom *),"dump:thresh_fix");
       thresh_fixID = (char **)
         memory->srealloc(thresh_fixID,(nthreshlast+1)*sizeof(char *),"dump:thresh_fixID");
       memory->grow(thresh_first,(nthreshlast+1),"dump:thresh_first");
 
       std::string threshid = fmt::format("{}{}_DUMP_STORE",id,nthreshlast);
       thresh_fixID[nthreshlast] = utils::strdup(threshid);
-      threshid += fmt::format(" {} STORE peratom 1 1", group->names[igroup]);
-      thresh_fix[nthreshlast] = (FixStore *) modify->add_fix(threshid);
+      threshid += fmt::format(" {} STORE/PERATOM 1 1", group->names[igroup]);
+      thresh_fix[nthreshlast] = dynamic_cast<FixStorePeratom *>(modify->add_fix(threshid));
 
       thresh_last[nthreshlast] = nthreshlast;
       thresh_first[nthreshlast] = 1;

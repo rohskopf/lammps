@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -20,7 +20,6 @@
 #include "error.h"
 #include "force.h"
 #include "memory.h"
-#include "modify.h"
 #include "neigh_list.h"
 #include "neighbor.h"
 #include "pair.h"
@@ -37,10 +36,10 @@ using namespace LAMMPS_NS;
 ------------------------------------------------------------------------------------*/
 
 static const char cite_compute_stress_cartesian[] =
-    "compute stress/cartesian:\n\n"
+    "compute stress/cartesian: doi:10.3390/nano11010165\n\n"
     "@article{galteland2021nanothermodynamic,\n"
-    "title={Nanothermodynamic description and molecular simulation of a single-phase fluid in a "
-    "slit pore},\n"
+    "title={Nanothermodynamic Description and Molecular Simulation of a\n"
+    "   Single-Phase Fluid in a Slit Pore},\n"
     "author={Galteland, Olav and Bedeaux, Dick and Kjelstrup, Signe},\n"
     "journal={Nanomaterials},\n"
     "volume={11},\n"
@@ -258,7 +257,7 @@ void ComputeStressCartesian::compute_array()
   // loop over neighbors of my atoms
   // skip if I or J are not in group
   // for newton = 0 and J = ghost atom,
-  //   need to insure I,J pair is only output by one proc
+  //   need to ensure I,J pair is only output by one proc
   //   use same itag,jtag logic as in Neighbor::neigh_half_nsq()
   // for flag = 0, just count pair interactions within force cutoff
   // for flag = 1, calculate requested output fields
@@ -266,7 +265,7 @@ void ComputeStressCartesian::compute_array()
   Pair *pair = force->pair;
   double **cutsq = force->pair->cutsq;
 
-  double xi1, xi2, xj1, xj2;
+  double xi1, xi2;
 
   for (ii = 0; ii < inum; ii++) {
     i = ilist[ii];
@@ -305,9 +304,6 @@ void ComputeStressCartesian::compute_array()
           }
         }
       }
-      xj1 = x[j][dir1];
-      xj2 = x[j][dir2];
-
       delx = x[j][0] - xtmp;
       dely = x[j][1] - ytmp;
       delz = x[j][2] - ztmp;

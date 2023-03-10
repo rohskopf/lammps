@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -131,7 +131,7 @@ FixPour::FixPour(LAMMPS *lmp, int narg, char **arg) :
 
       if (atom->molecular == Atom::TEMPLATE && onemols != atom->avec->onemols)
         error->all(FLERR, "Fix pour molecule template ID must be same as atom style template ID");
-      onemols[i]->check_attributes(0);
+      onemols[i]->check_attributes();
 
       // fix pour uses geoemetric center of molecule for insertion
 
@@ -213,7 +213,7 @@ FixPour::FixPour(LAMMPS *lmp, int narg, char **arg) :
   // depends on specified volume fraction
   // volume = volume of insertion region
   // volume_one = volume of inserted particle (with max possible radius)
-  // in 3d, insure dy >= 1, for quasi-2d simulations
+  // in 3d, ensure dy >= 1, for quasi-2d simulations
 
   double volume, volume_one = 1.0;
 
@@ -296,7 +296,7 @@ void FixPour::init()
   region = domain->get_region_by_id(idregion);
   if (!region) error->all(FLERR, "Fix pour region {} does not exist", idregion);
 
-  // insure gravity fix (still) exists
+  // ensure gravity fix (still) exists
   // for 3d must point in -z, for 2d must point in -y
   // else insertion cannot work
 
