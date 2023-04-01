@@ -35,6 +35,8 @@ template<class DeviceType>
 ComputeCoordAtomKokkos<DeviceType>::ComputeCoordAtomKokkos(LAMMPS *lmp, int narg, char **arg) :
   ComputeCoordAtom(lmp, narg, arg)
 {
+
+  printf("^^^ inside ComputeCoordAtomKokkos constructor\n");
   kokkosable = 1;
   atomKK = (AtomKokkos *) atom;
   execution_space = ExecutionSpaceFromDevice<DeviceType>::space;
@@ -90,6 +92,8 @@ void ComputeCoordAtomKokkos<DeviceType>::compute_peratom()
   invoked_peratom = update->ntimestep;
 
   // grow coordination array if necessary
+
+  printf("^^^ inside compute_peratom\n");
 
   if (atom->nmax > nmax) {
     if (ncol == 1) {
