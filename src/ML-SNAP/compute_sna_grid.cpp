@@ -56,6 +56,7 @@ ComputeSNAGrid::ComputeSNAGrid(LAMMPS *lmp, int narg, char **arg) :
   wselfallflag = 0;
   switchinnerflag = 0;
   nelements = 1;
+  chunksize = 32768;
 
   // process required arguments
 
@@ -205,6 +206,8 @@ void ComputeSNAGrid::init()
 
 void ComputeSNAGrid::compute_array()
 {
+  printf("^^^ inside ComputeSNAGrid compute_array()\n");
+
   invoked_array = update->ntimestep;
 
   // compute sna for each gridpoint

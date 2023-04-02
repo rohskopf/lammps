@@ -49,6 +49,7 @@ class ComputeSNAGrid : public ComputeGrid {
   int quadraticflag;
   double rfac0, rmin0;
   int twojmax, switchflag, bzeroflag, bnormflag, wselfallflag;
+  int chunksize;
 
 };
 

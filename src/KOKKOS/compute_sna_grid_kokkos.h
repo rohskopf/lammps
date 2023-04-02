@@ -124,6 +124,7 @@ class ComputeSNAGridKokkos : public ComputeSNAGrid {
 
   SNAKokkos<DeviceType, real_type, vector_length> snaKK;
 
+  int chunk_size, chunk_offset;
   int host_flag;
 
   Kokkos::View<real_type*, DeviceType> d_radelem;              // element radii
@@ -132,6 +133,10 @@ class ComputeSNAGridKokkos : public ComputeSNAGrid {
   Kokkos::View<real_type*, DeviceType> d_sinnerelem;           // element inner cutoff midpoint
   Kokkos::View<real_type*, DeviceType> d_dinnerelem;           // element inner cutoff half-width
   Kokkos::View<T_INT*, DeviceType> d_map;                    // mapping from atom types to elements
+
+
+  typename AT::t_x_array_randomread x;
+  typename AT::t_int_1d_randomread type;
 
 };
 

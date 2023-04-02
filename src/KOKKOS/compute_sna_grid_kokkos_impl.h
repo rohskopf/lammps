@@ -170,6 +170,7 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::init()
 template<class DeviceType, typename real_type, int vector_length>
 void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::compute_array()
 {
+  printf("^^^ Begin ComputeSNAGridKokkos compute_array()\n");
   if (host_flag) {
     /*
     atomKK->sync(Host,X_MASK|F_MASK|TYPE_MASK);
@@ -179,7 +180,31 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::compute_array()
     return;
   }
 
-  printf("^^^ inside compute sna grid kokkos compute\n");
+
+  atomKK->sync(execution_space,X_MASK|F_MASK|TYPE_MASK);
+  x = atomKK->k_x.view<DeviceType>();
+  // This will error because trying to access host view on the device:
+  //printf("x(0,0): %f\n", x(0,0));
+  type = atomKK->k_type.view<DeviceType>();
+  
+  // Pair snap/kk uses grow_ij with some max number of neighs but compute sna/grid uses total 
+  // number of atoms.
+  
+  const int ntotal = atomKK->nlocal + atomKK->nghost;
+  printf("^^^ ntotal:  %d\n", ntotal);
+
+  // ensure rij, inside, and typej are of size jnum
+  // snaKK.grow_rij(int, int) requires 2 args where one is a chunksize.
+
+  chunk_size = MIN(chunksize, ntotal); // "chunksize" variable is set by user
+  printf("^^^ chunk_size: %d\n", chunk_size);
+  snaKK.grow_rij(chunk_size, ntotal);
+
+  // begin triple loop over grid points
+  
+  // experiment with MD range policy first? 
+
+  printf("^^^ End ComputeSNAGridKokkos compute_array()\n");
 }
 
 /* ----------------------------------------------------------------------
