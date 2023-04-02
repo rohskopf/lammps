@@ -26,7 +26,8 @@
 #include "neigh_list.h"
 #include "neigh_request.h"
 #include "neighbor_kokkos.h"
-#include "sna_kokkos.h"
+//#include "sna_kokkos.h"
+#include "sna.h"
 #include "update.h"
 
 #include <cmath>
@@ -56,6 +57,12 @@ ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::ComputeSNAGridKokkos
   //rnd_cutsq = d_cutsq;
 
   host_flag = (execution_space == Host);
+
+  // ComputeSNAGrid constructor allocates `map` so let's do same here.
+  // actually, let's move this down to init
+  //int n = atom->ntypes;
+  //printf("^^^ realloc d_map\n");
+  //MemKK::realloc_kokkos(d_map,"ComputeSNAGridKokkos::map",n+1);
 }
 
 // Destructor
@@ -74,8 +81,77 @@ ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::~ComputeSNAGridKokko
 template<class DeviceType, typename real_type, int vector_length>
 void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::init()
 {
+  printf("^^^ Begin ComputeSNAGridKokkos init()\n");
+  // The part of pair_snap_kokkos_impl.h that allocates snap params is coeff(), and it 
+  // calls the original coeff function. So let's do that here: 
+
+  ComputeSNAGrid::init();
+
+  // Set up element lists
+  printf("^^^ Begin kokkos reallocs\n");
+  MemKK::realloc_kokkos(d_radelem,"ComputeSNAGridKokkos::radelem",nelements);
+  MemKK::realloc_kokkos(d_wjelem,"pair:wjelem",nelements);
+  // pair snap kokkos uses `ncoeffall` in the following, inherits from original.
+  //MemKK::realloc_kokkos(d_coeffelem,"pair:coeffelem",nelements,ncoeff);
+  MemKK::realloc_kokkos(d_sinnerelem,"pair:sinnerelem",nelements);
+  MemKK::realloc_kokkos(d_dinnerelem,"pair:dinnerelem",nelements);
+  int n = atom->ntypes;
+  //printf("^^^ realloc d_map\n");
+  printf("^^^ n: %d\n", n);
+  MemKK::realloc_kokkos(d_map,"ComputeSNAGridKokkos::map",n+1);
+
+  printf("^^^ begin mirrow view creation\n");
+  auto h_radelem = Kokkos::create_mirror_view(d_radelem);
+  auto h_wjelem = Kokkos::create_mirror_view(d_wjelem);
+  //auto h_coeffelem = Kokkos::create_mirror_view(d_coeffelem);
+  auto h_sinnerelem = Kokkos::create_mirror_view(d_sinnerelem);
+  auto h_dinnerelem = Kokkos::create_mirror_view(d_dinnerelem);
+  auto h_map = Kokkos::create_mirror_view(d_map);
+
+  printf("^^^ begin loop over elements, nelements = %d\n", nelements);
+  for (int ielem = 0; ielem < nelements; ielem++) {
+    printf("^^^^^ ielem %d\n", ielem);
+    h_radelem(ielem) = radelem[ielem];
+    printf("^^^^^ 1\n");
+    h_wjelem(ielem) = wjelem[ielem];
+    printf("^^^^^ 2\n");
+    if (switchinnerflag){
+      h_sinnerelem(ielem) = sinnerelem[ielem];
+      h_dinnerelem(ielem) = dinnerelem[ielem];
+    }
+    // pair snap kokkos uses `ncoeffall` in the following.
+    //for (int jcoeff = 0; jcoeff < ncoeff; jcoeff++) {
+    //  h_coeffelem(ielem,jcoeff) = coeffelem[ielem][jcoeff];
+    //}
+  }
+
+  printf("^^^ begin loop over map\n");
+  // NOTE: At this point it's becoming obvious that compute sna grid is not like pair snap, where 
+  // some things like `map` get allocated regardless of chem flag.
+  if (chemflag){ 
+    for (int i = 1; i <= atom->ntypes; i++) {
+      h_map(i) = map[i];
+      printf("%d\n", map[i]);
+    }
+  }
+
+  Kokkos::deep_copy(d_radelem,h_radelem);
+  Kokkos::deep_copy(d_wjelem,h_wjelem);
+  if (switchinnerflag){
+    Kokkos::deep_copy(d_sinnerelem,h_sinnerelem);
+    Kokkos::deep_copy(d_dinnerelem,h_dinnerelem);
+  }
+  if (chemflag){
+    Kokkos::deep_copy(d_map,h_map);
+  }
+
+  snaKK = SNAKokkos<DeviceType, real_type, vector_length>(rfac0,twojmax,
+    rmin0,switchflag,bzeroflag,chemflag,bnormflag,wselfallflag,nelements,switchinnerflag);
+  snaKK.grow_rij(0,0);
+  snaKK.init();
 
   if (host_flag) {
+
     // The following lmp->kokkos will compile error with pointer to incomplete class type not allowed.
     //if (lmp->kokkos->nthreads > 1)
     //  error->all(FLERR,"Compute style sna/grid/kk can currently only run on a single "
@@ -85,7 +161,7 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::init()
     return;
   }
 
-  printf("^^^ inside compute sna grid kokkos init\n");
+  printf("^^^ Finished ComputeSNAGridKokkos init\n");
 
 }
 

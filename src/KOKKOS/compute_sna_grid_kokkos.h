@@ -126,6 +126,13 @@ class ComputeSNAGridKokkos : public ComputeSNAGrid {
 
   int host_flag;
 
+  Kokkos::View<real_type*, DeviceType> d_radelem;              // element radii
+  Kokkos::View<real_type*, DeviceType> d_wjelem;               // elements weights
+  //Kokkos::View<real_type**, Kokkos::LayoutRight, DeviceType> d_coeffelem;           // element bispectrum coefficients
+  Kokkos::View<real_type*, DeviceType> d_sinnerelem;           // element inner cutoff midpoint
+  Kokkos::View<real_type*, DeviceType> d_dinnerelem;           // element inner cutoff half-width
+  Kokkos::View<T_INT*, DeviceType> d_map;                    // mapping from atom types to elements
+
 };
 
 // These wrapper classes exist to make the compute style factory happy/avoid having
