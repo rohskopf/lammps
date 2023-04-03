@@ -57,6 +57,8 @@ ComputeGrid::ComputeGrid(LAMMPS *lmp, int narg, char **arg) :
 
 ComputeGrid::~ComputeGrid()
 {
+  printf("^^^ begin ComputeGrid destructor\n");
+  if (copymode) return;
   deallocate();
 }
 

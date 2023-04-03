@@ -61,6 +61,7 @@ struct TagPairSNAPComputeFusedDeidrjSmall{}; // more parallelism, more divergenc
 template<int dir>
 struct TagPairSNAPComputeFusedDeidrjLarge{}; // less parallelism, no divergence
 */
+struct TagComputeSNAGridLoop{};
 
 // CPU backend only
 /*
@@ -76,6 +77,7 @@ struct TagPairSNAPComputeYiCPU{};
 struct TagPairSNAPComputeDuidrjCPU{};
 struct TagPairSNAPComputeDeidrjCPU{};
 */
+struct TagComputeSNAGridLoopCPU{};
 
 //template<class DeviceType>
 template<class DeviceType, typename real_type_, int vector_length_>
@@ -119,6 +121,12 @@ class ComputeSNAGridKokkos : public ComputeSNAGrid {
 
   void init() override;
   void compute_array() override;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagComputeSNAGridLoop, const int& ) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagComputeSNAGridLoopCPU, const int&) const;
 
  private:
 

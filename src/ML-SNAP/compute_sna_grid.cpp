@@ -183,11 +183,17 @@ ComputeSNAGrid::ComputeSNAGrid(LAMMPS *lmp, int narg, char **arg) :
 
 ComputeSNAGrid::~ComputeSNAGrid()
 {
-  memory->destroy(radelem);
-  memory->destroy(wjelem);
-  memory->destroy(cutsq);
-  delete snaptr;
+  if (copymode) return;
 
+  printf("^^^ begin ComputeSNAGrid destructor\n");
+  memory->destroy(radelem);
+  printf("^^^^ CSG 1\n");
+  memory->destroy(wjelem);
+  printf("^^^^ CSG 2\n");
+  memory->destroy(cutsq);
+  printf("^^^^ CSG 3\n");
+  delete snaptr;
+  printf("^^^^ CSG 4\n");
   if (chemflag) memory->destroy(map);
 }
 
@@ -216,6 +222,8 @@ void ComputeSNAGrid::compute_array()
   const int *const mask = atom->mask;
   int *const type = atom->type;
   const int ntotal = atom->nlocal + atom->nghost;
+
+  printf("^^^ ntotal: %d\n", ntotal);
 
   // ensure rij, inside, and typej are of size jnum
 

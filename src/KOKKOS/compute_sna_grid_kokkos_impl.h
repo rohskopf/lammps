@@ -70,10 +70,11 @@ ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::ComputeSNAGridKokkos
 template<class DeviceType, typename real_type, int vector_length>
 ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::~ComputeSNAGridKokkos()
 {
-  //if (copymode) return;
+  if (copymode) return;
 
   //memoryKK->destroy_kokkos(k_eatom,eatom);
   //memoryKK->destroy_kokkos(k_vatom,vatom);
+  printf("^^^ Finish ComputeSNAGridKokkos destructor\n");
 }
 
 // Init
@@ -180,6 +181,7 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::compute_array()
     return;
   }
 
+  copymode = 1;
 
   atomKK->sync(execution_space,X_MASK|F_MASK|TYPE_MASK);
   x = atomKK->k_x.view<DeviceType>();
@@ -202,9 +204,50 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::compute_array()
 
   // begin triple loop over grid points
   
-  // experiment with MD range policy first? 
+  // experiment with MD range policy first?
+  
+
+  // let's try a simple parallel for loop
+  typename Kokkos::RangePolicy<DeviceType,TagComputeSNAGridLoop> policy_loop(0,4);
+  // perhaps the `this` is causing the seg fault when running from python?
+  // TODO: Don't use *this here...?
+  // No... that just allows to find functor
+  Kokkos::parallel_for("Loop",policy_loop,*this);
+  // Simple working loop:
+  /* 
+  Kokkos::parallel_for("Loop1", 4, KOKKOS_LAMBDA (const int& i) {
+    printf("Greeting from iteration %i\n",i);
+  });
+  */
 
   printf("^^^ End ComputeSNAGridKokkos compute_array()\n");
+}
+
+/* ----------------------------------------------------------------------
+   Begin routines that are unique to the GPU codepath. These take advantage
+   of AoSoA data layouts and scratch memory for recursive polynomials
+------------------------------------------------------------------------- */
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagComputeSNAGridLoop,const int& asdf) const {
+  //printf("inside parallel for\n");
+  printf("%d\n", asdf);
+
+}
+
+/* ----------------------------------------------------------------------
+   Begin routines that are unique to the CPU codepath. These do not take
+   advantage of AoSoA data layouts, but that could be a good point of
+   future optimization and unification with the above kernels. It's unlikely
+   that scratch memory optimizations will ever be useful for the CPU due to
+   different arithmetic intensity requirements for the CPU vs GPU.
+------------------------------------------------------------------------- */
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagComputeSNAGridLoopCPU,const int& ii) const {
+
 }
 
 /* ----------------------------------------------------------------------
