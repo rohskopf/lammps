@@ -16,6 +16,7 @@
 ------------------------------------------------------------------------- */
 
 #include "compute_sna_grid_kokkos.h"
+#include "pair_snap_kokkos.h"
 
 #include "atom_kokkos.h"
 #include "atom_masks.h"
@@ -52,9 +53,9 @@ ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::ComputeSNAGridKokkos
   datamask_read = EMPTY_MASK;
   datamask_modify = EMPTY_MASK;
 
-  //k_cutsq = tdual_fparams("PairSNAPKokkos::cutsq",atom->ntypes+1,atom->ntypes+1);
-  //auto d_cutsq = k_cutsq.template view<DeviceType>();
-  //rnd_cutsq = d_cutsq;
+  k_cutsq = tdual_fparams("ComputeSNAGridKokkos::cutsq",atom->ntypes+1,atom->ntypes+1);
+  auto d_cutsq = k_cutsq.template view<DeviceType>();
+  rnd_cutsq = d_cutsq;
 
   host_flag = (execution_space == Host);
 
@@ -63,6 +64,11 @@ ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::ComputeSNAGridKokkos
   //int n = atom->ntypes;
   //printf("^^^ realloc d_map\n");
   //MemKK::realloc_kokkos(d_map,"ComputeSNAGridKokkos::map",n+1);
+  
+
+  printf("^^^^^ cutsq: %f\n", cutsq[1][1]);
+
+  cutsq_tmp = cutsq[1][1];
 }
 
 // Destructor
@@ -172,6 +178,13 @@ template<class DeviceType, typename real_type, int vector_length>
 void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::compute_array()
 {
   printf("^^^ Begin ComputeSNAGridKokkos compute_array()\n");
+
+  if (DeviceType::in_parallel()) {
+    printf("^^^ compute_array() is a host function\n");
+  } else {
+    printf("^^^ compute_array() is not a host function\n");
+  }
+
   if (host_flag) {
     /*
     atomKK->sync(Host,X_MASK|F_MASK|TYPE_MASK);
@@ -183,41 +196,107 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::compute_array()
 
   copymode = 1;
 
+  zlen = nzhi-nzlo+1;
+  ylen = nyhi-nylo+1;
+  xlen = nxhi-nxlo+1;
+  printf("^^^ nzlo nzhi nylo nyhi nxlo nxhi: %d %d %d %d %d %d\n", nzlo, nzhi, nylo, nyhi, nxlo, nxhi);
+  total_range = (nzhi-nzlo+1)*(nyhi-nylo+1)*(nxhi-nxlo+1);
+
   atomKK->sync(execution_space,X_MASK|F_MASK|TYPE_MASK);
   x = atomKK->k_x.view<DeviceType>();
   // This will error because trying to access host view on the device:
   //printf("x(0,0): %f\n", x(0,0));
   type = atomKK->k_type.view<DeviceType>();
+  k_cutsq.template sync<DeviceType>();
+
+
+  MemKK::realloc_kokkos(d_ninside,"PairSNAPKokkos:ninside",total_range);
+
+  //printf("^^^ nzlo nzhi nylo nyhi nxlo nxhi: %d %d %d %d %d %d\n", nzlo, nzhi, nylo, nyhi, nxlo, nxhi);
   
   // Pair snap/kk uses grow_ij with some max number of neighs but compute sna/grid uses total 
   // number of atoms.
   
-  const int ntotal = atomKK->nlocal + atomKK->nghost;
-  printf("^^^ ntotal:  %d\n", ntotal);
+  //const int ntotal = atomKK->nlocal + atomKK->nghost;
+  ntotal = atomKK->nlocal + atomKK->nghost;
+  //printf("^^^ ntotal:  %d\n", ntotal);
 
   // ensure rij, inside, and typej are of size jnum
   // snaKK.grow_rij(int, int) requires 2 args where one is a chunksize.
 
-  chunk_size = MIN(chunksize, ntotal); // "chunksize" variable is set by user
-  printf("^^^ chunk_size: %d\n", chunk_size);
+  chunk_size = MIN(chunksize, total_range); // "chunksize" variable is set by user
+  //printf("^^^ chunk_size: %d\n", chunk_size);
   snaKK.grow_rij(chunk_size, ntotal);
 
-  // begin triple loop over grid points
-  
-  // experiment with MD range policy first?
-  
+  // Launch 3 teams of the maximum number of threads per team
+  //const int team_size_max = team_policy(3, 1).team_size_max(
+  //    TagCSNAGridTeamPolicy, Kokkos::ParallelForTag());
+  //typename Kokkos::TeamPolicy<DeviceType, TagCSNAGridTeamPolicy> team_policy_test(3,1);
+
+  // Using custom policy:
+  /* 
+  CSNAGridTeamPolicy<DeviceType, team_size_compute_neigh ,TagCSNAGridTeam> team_policy(chunk_size,team_size_compute_neigh,vector_length);
+  //team_policy = team_policy.set_scratch_size(0, Kokkos::PerTeam(scratch_size));
+  Kokkos::parallel_for("TeamPolicy",team_policy,*this);
+  */
+
+
+  chunk_size = total_range; 
+  printf("%d %d %d\n", chunk_size, team_size_compute_neigh, vector_length);
+  // team_size_compute_neigh is defined in `pair_snap_kokkos.h`
+  int scratch_size = scratch_size_helper<int>(team_size_compute_neigh * ntotal);
+  // The following launches `chunk_size` teams, each with `team_size` threads, using a vector length of `vector_length`.
+  typename Kokkos::TeamPolicy<DeviceType, TagCSNAGridTeam> policy_team(chunk_size,team_size_compute_neigh,vector_length);
+  policy_team = policy_team.set_scratch_size(0, Kokkos::PerTeam(scratch_size)); 
+  Kokkos::parallel_for("TeamPolicy",policy_team,*this);
+
+
+
+  //ComputeNeigh
+   
+  {
+    // team_size_compute_neigh is defined in `pair_snap_kokkos.h`
+    //int scratch_size = scratch_size_helper<int>(team_size_compute_neigh * ntotal);
+
+    //SnapAoSoATeamPolicy<DeviceType, team_size_compute_neigh, TagCSNAGridComputeNeigh> policy_neigh(chunk_size,team_size_compute_neigh,vector_length);
+    //policy_neigh = policy_neigh.set_scratch_size(0, Kokkos::PerTeam(scratch_size));
+    //Kokkos::parallel_for("ComputeNeigh",policy_neigh,*this);
+  }
+ 
 
   // let's try a simple parallel for loop
+  // NOTE: We get the compiler error calling host function DeviceType::in_parallel() in this 
+  // function, because this is a host-device function.
+  /*
   typename Kokkos::RangePolicy<DeviceType,TagComputeSNAGridLoop> policy_loop(0,4);
-  // perhaps the `this` is causing the seg fault when running from python?
-  // TODO: Don't use *this here...?
-  // No... that just allows to find functor
   Kokkos::parallel_for("Loop",policy_loop,*this);
+  */
+
+
   // Simple working loop:
   /* 
   Kokkos::parallel_for("Loop1", 4, KOKKOS_LAMBDA (const int& i) {
     printf("Greeting from iteration %i\n",i);
   });
+  */
+
+  /*
+  // NOTE: We get the compiler error calling host function DeviceType::in_parallel() in this 
+  // function, because this is a host-device function.
+  const int chunk_size_div = (chunk_size + vector_length - 1) / vector_length;
+  Snap3DRangePolicy<DeviceType, tile_size_compute_ck, TagCSNAGridComputeCayleyKlein>
+      policy_compute_ck({0,0,0},{vector_length,ntotal,chunk_size_div},{vector_length,tile_size_compute_ck,1});
+  Kokkos::parallel_for("ComputeCayleyKlein",policy_compute_ck,*this);
+  */
+
+  // Simple example of 3D MD range policy.
+  // Begin loop over grid points.
+  /*
+  // NOTE: We don't get the compiler error calling host function DeviceType::in_parallel() in this 
+  // function, but we get it in the above function.
+  int n = 3; // bounds for mdrange policy
+  typename Kokkos::MDRangePolicy<DeviceType, Kokkos::IndexType<int>, Kokkos::Rank<3, Kokkos::Iterate::Left, Kokkos::Iterate::Left>, TagComputeSNAGrid3D> policy_3d({0,0,0},{n,n,n});
+  Kokkos::parallel_for("3D",policy_3d,*this);
   */
 
   printf("^^^ End ComputeSNAGridKokkos compute_array()\n");
@@ -228,11 +307,271 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::compute_array()
    of AoSoA data layouts and scratch memory for recursive polynomials
 ------------------------------------------------------------------------- */
 
+/*
+ Simple team policy functor seeing how many layers deep we can go with the parallelism.
+ */
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridTeam,const typename Kokkos::TeamPolicy<DeviceType,TagCSNAGridTeam>::member_type& team) const {
+
+  // this function is following the same procedure in ComputeNeigh of PairSNAPKokkos
+
+  SNAKokkos<DeviceType, real_type, vector_length> my_sna = snaKK;
+
+  // basic quantities associated with this team:
+  // team_rank : rank of thread in this team
+  // league_rank : rank of team in this league
+  // team_size : number of threads in this team
+  //printf("%d %d %d\n", team.team_rank(), team.league_rank(), team.team_size());
+
+  // extract loop index
+  int ii = team.team_rank() + team.league_rank() * team.team_size();
+  if (ii >= chunk_size) return;
+
+  // get a pointer to scratch memory
+  // This is used to cache whether or not an atom is within the cutoff.
+  // If it is, type_cache is assigned to the atom type.
+  // If it's not, it's assigned to -1.
+  const int tile_size = ntotal; // number of elements per thread
+  const int team_rank = team.team_rank();
+  const int scratch_shift = team_rank * tile_size; // offset into pointer for entire team
+  //printf("ntotal scratch_shift: %d %d\n", ntotal, scratch_shift);
+  int* type_cache = (int*)team.team_shmem().get_shmem(team.team_size() * tile_size * sizeof(int), 0) + scratch_shift;
+
+  //printf("ii: %d\n", ii);
+
+  // convert to grid indices
+
+  int iz = ii/(xlen*ylen);
+  int i2 = ii - (iz*xlen*ylen);
+  int iy = i2/xlen;
+  int ix = i2 % xlen;
+  iz += nzlo;
+  iy += nylo;
+  ix += nxlo;
+
+  double xgrid[3];
+  //int igrid = iz * (nx * ny) + iy * nx + ix;
+
+  // these end up being the same...?
+  //printf("ii igrid: %d %d\n", ii, igrid);
+
+  // grid2x converts igrid to ix,iy,iz like we've done before
+  //grid2x(igrid, xgrid);
+  xgrid[0] = ix * delx;
+  xgrid[1] = iy * dely;
+  xgrid[2] = iz * delz;
+  const double xtmp = xgrid[0];
+  const double ytmp = xgrid[1];
+  const double ztmp = xgrid[2];
+
+  // currently, all grid points are type 1
+  // not clear what a better choice would be
+
+  const int itype = 1;
+  const int ielem = d_map[itype];
+  const double radi = d_radelem[ielem];
+
+  // We need a DomainKokkos::lamda2x parallel for loop here, but let's ignore for now.
+  if (triclinic){
+    printf("We are triclinic %f %f %f\n", xtmp, ytmp, ztmp);
+  } else {
+    //printf("We are not triclinic\n");
+  }
+
+  // can check xgrid positions with original
+  //printf("%f %f %f\n", xgrid[0], xgrid[1], xgrid[2]);
+
+  // Compute the number of neighbors, store rsq
+  int ninside = 0;
+  // want to loop over ntotal... keep getting seg fault when accessing type_cache[j]?
+  //printf("ntotal: %d\n", ntotal);
+  Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(team,ntotal),
+    [&] (const int j, int& count) {
+
+    // From pair snap/kk :
+    /*
+    T_INT j = d_neighbors(i,jj);
+    const F_FLOAT dx = x(j,0) - xtmp;
+    const F_FLOAT dy = x(j,1) - ytmp;
+    const F_FLOAT dz = x(j,2) - ztmp;
+    */
+    // From compute sna/grid/kk :
+    /*
+    const double delx = xtmp - x[j][0];
+    const double dely = ytmp - x[j][1];
+    const double delz = ztmp - x[j][2];
+    */
+    const F_FLOAT dx = x(j,0) - xtmp;
+    const F_FLOAT dy = x(j,1) - ytmp;
+    const F_FLOAT dz = x(j,2) - ztmp;
+    //printf("dx: %f\n", dx);
+
+    //const double rsq = delx * delx + dely * dely + delz * delz;
+    int jtype = type(j);
+    //printf("jtype: %d\n", jtype);
+    //int jelem = 0;
+    //if (rsq < cutsq[jtype][jtype] && rsq > 1e-20) {
+    const F_FLOAT rsq = dx*dx + dy*dy + dz*dz;
+
+    //if (rsq >= rnd_cutsq(itype,jtype)) {
+    if (rsq >= cutsq_tmp){
+      jtype = -1; // use -1 to signal it's outside the radius
+    }
+    //printf("jtype rsq rnd_cutsq: %d %f %f\n", jtype, rsq, rnd_cutsq(itype, jtype));
+
+    if (j > 340){
+      printf("j: %d\n", j);
+    }
+
+    //printf("j: %d\n", j);
+    type_cache[j] = jtype;
+
+    if (jtype >= 0)
+     count++;
+
+  }, ninside);
+
+  printf("ninside: %d\n", ninside);
+
+  d_ninside(ii) = ninside;
+
+  // TODO: Make sure itype is appropriate instead of ielem
+  Kokkos::parallel_scan(Kokkos::ThreadVectorRange(team,ntotal),
+    [&] (const int j, int& offset, bool final) {
+
+    const int jtype = type_cache[j];
+
+    if (jtype >= 0) {
+      if (final) {
+        const F_FLOAT dx = x(j,0) - xtmp;
+        const F_FLOAT dy = x(j,1) - ytmp;
+        const F_FLOAT dz = x(j,2) - ztmp;
+        const int jelem = d_map[jtype];
+        my_sna.rij(ii,offset,0) = static_cast<real_type>(dx);
+        my_sna.rij(ii,offset,1) = static_cast<real_type>(dy);
+        my_sna.rij(ii,offset,2) = static_cast<real_type>(dz);
+        my_sna.wj(ii,offset) = static_cast<real_type>(d_wjelem[jelem]);
+        my_sna.rcutij(ii,offset) = static_cast<real_type>((radi + d_radelem[jelem])*rcutfac);
+        my_sna.inside(ii,offset) = j;
+        if (switchinnerflag) {
+          my_sna.sinnerij(ii,offset) = 0.5*(d_sinnerelem[itype] + d_sinnerelem[jelem]);
+          my_sna.dinnerij(ii,offset) = 0.5*(d_dinnerelem[itype] + d_dinnerelem[jelem]);
+        }
+        if (chemflag)
+          my_sna.element(ii,offset) = jelem;
+        else
+          my_sna.element(ii,offset) = 0;
+      }
+      offset++;
+    }
+  });
+}
+
 template<class DeviceType, typename real_type, int vector_length>
 KOKKOS_INLINE_FUNCTION
 void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagComputeSNAGridLoop,const int& asdf) const {
   //printf("inside parallel for\n");
   printf("%d\n", asdf);
+
+  /*
+  typename Kokkos::RangePolicy<DeviceType,TagComputeSNAGridLoop> policy_loop(0,2);
+  Kokkos::parallel_for("Loop",policy_loop,*this);
+  */
+
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagComputeSNAGrid3D,const int& iz, const int& iy, const int& ix) const {
+  //printf("inside parallel for\n");
+  printf("^^^ ix iy iz: %d %d %d\n", ix, iy, iz);
+
+  // Let's try to do calculations inside here and see what happens.
+
+  if (host_flag){
+
+  } else { // GPU
+
+#ifdef LMP_KOKKOS_GPU
+
+    // Pre-compute ceil(chunk_size / vector_length) for code cleanliness
+    const int chunk_size_div = (chunk_size + vector_length - 1) / vector_length;
+    //printf("^^^ ComputeSNAGrid3D chunk_size_div: %d\n", chunk_size_div);
+    //ComputeCayleyKlein
+    {
+      //printf("^^^ inside bracket\n");
+
+      if (DeviceType::in_parallel()) {
+        printf("operator() of TagComputeSNAGrid3D is a host function\n");
+      } else {
+        printf("operator() of TagComputeSNAGrid3D is not a host function\n");
+      }
+  
+      // This returns true:
+      //auto test = std::is_same<DeviceType,LMPDeviceType>::value;
+      //printf("%d\n", test);
+
+      // tile_size_compute_ck is defined in `compute_sna_grid_kokkos.h`
+      // The policy constructors are host functions so this raises compiler warning and also 
+      // isnt allowed... we should use teams.
+      /* 
+      Snap3DRangePolicy<DeviceType, tile_size_compute_ck, TagCSNAGridComputeCayleyKlein>
+          policy_compute_ck({0,0,0},{vector_length,ntotal,chunk_size_div},{vector_length,tile_size_compute_ck,1});
+      printf("^^^ begin parallel_for\n");
+      Kokkos::parallel_for("ComputeCayleyKlein",policy_compute_ck,*this);
+      */
+      
+    }
+#endif // LMP_KOKKOS_GPU
+
+  }
+  
+
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridComputeCayleyKlein,const int iatom_mod, const int jnbor, const int iatom_div) const {
+  SNAKokkos<DeviceType, real_type, vector_length> my_sna = snaKK;
+
+  printf("^^^ ComputeCayleyKlein\n");
+
+  /*
+  if (DeviceType::in_parallel()) {
+    printf("operator() of TagCSNAGridComputeCayleyKlein is a host function\n");
+  } else {
+    printf("operator() of TagCSNAGridComputeCayleyKlein is not a host function\n");
+  }
+  */
+
+  const int ii = iatom_mod + iatom_div * vector_length;
+  if (ii >= chunk_size) return;
+
+  const int ninside = ntotal; //d_ninside(ii);
+  if (jnbor >= ninside) return;
+
+  my_sna.compute_cayley_klein(iatom_mod,jnbor,iatom_div);
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridPreUi, const int iatom_mod, const int j, const int iatom_div) const {
+  SNAKokkos<DeviceType, real_type, vector_length> my_sna = snaKK;
+
+  const int ii = iatom_mod + iatom_div * vector_length;
+  if (ii >= chunk_size) return;
+
+  int itype = type(ii);
+  int ielem = d_map[itype];
+
+  my_sna.pre_ui(iatom_mod, j, ielem, iatom_div);
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridComputeNeigh,const typename Kokkos::TeamPolicy<DeviceType,TagCSNAGridComputeNeigh>::member_type& team) const {
+
 
 }
 
@@ -249,6 +588,42 @@ KOKKOS_INLINE_FUNCTION
 void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagComputeSNAGridLoopCPU,const int& ii) const {
 
 }
+
+/* ----------------------------------------------------------------------
+   utility functions
+------------------------------------------------------------------------- */
+
+template<class DeviceType, typename real_type, int vector_length>
+template<class TagStyle>
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::check_team_size_for(int inum, int &team_size) {
+  int team_size_max;
+
+  team_size_max = Kokkos::TeamPolicy<DeviceType,TagStyle>(inum,Kokkos::AUTO).team_size_max(*this,Kokkos::ParallelForTag());
+
+  if (team_size*vector_length > team_size_max)
+    team_size = team_size_max/vector_length;
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+template<class TagStyle>
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::check_team_size_reduce(int inum, int &team_size) {
+  int team_size_max;
+
+  team_size_max = Kokkos::TeamPolicy<DeviceType,TagStyle>(inum,Kokkos::AUTO).team_size_max(*this,Kokkos::ParallelReduceTag());
+
+  if (team_size*vector_length > team_size_max)
+    team_size = team_size_max/vector_length;
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+template<typename scratch_type>
+int ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::scratch_size_helper(int values_per_team) {
+  typedef Kokkos::View<scratch_type*, Kokkos::DefaultExecutionSpace::scratch_memory_space, Kokkos::MemoryTraits<Kokkos::Unmanaged> > ScratchViewType;
+
+  return ScratchViewType::shmem_size(values_per_team);
+}
+
+/* ---------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
    routines used by template reference classes

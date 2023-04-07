@@ -61,7 +61,13 @@ struct TagPairSNAPComputeFusedDeidrjSmall{}; // more parallelism, more divergenc
 template<int dir>
 struct TagPairSNAPComputeFusedDeidrjLarge{}; // less parallelism, no divergence
 */
+//struct TagPairSNAPPreUi{};
+struct TagCSNAGridComputeNeigh{};
+struct TagCSNAGridPreUi{};
+struct TagCSNAGridComputeCayleyKlein{};
 struct TagComputeSNAGridLoop{};
+struct TagComputeSNAGrid3D{};
+struct TagCSNAGridTeam{};
 
 // CPU backend only
 /*
@@ -116,11 +122,46 @@ class ComputeSNAGridKokkos : public ComputeSNAGrid {
   static constexpr int team_size_compute_fused_deidrj = sizeof(real_type) == 4 ? 4 : 2;
 #endif
 
+  // Custom MDRangePolicy, Rank3, to reduce verbosity of kernel launches
+  // This hides the Kokkos::IndexType<int> and Kokkos::Rank<3...>
+  // and reduces the verbosity of the LaunchBound by hiding the explicit
+  // multiplication by vector_length
+  template <class Device, int num_tiles, class TagComputeSNAP>
+  using Snap3DRangePolicy = typename Kokkos::MDRangePolicy<Device, Kokkos::IndexType<int>, Kokkos::Rank<3, Kokkos::Iterate::Left, Kokkos::Iterate::Left>, Kokkos::LaunchBounds<vector_length * num_tiles>, TagComputeSNAP>;
+
+  // MDRangePolicy for the 3D grid loop:
+  template <class Device, class TagComputeSNAP>
+  using CSNAGrid3DPolicy = typename Kokkos::MDRangePolicy<Device, Kokkos::IndexType<int>, Kokkos::Rank<3, Kokkos::Iterate::Left, Kokkos::Iterate::Left>>;
+
+  // Testing out team policies
+  template <class Device, int num_teams,  class TagComputeSNAP>
+  using CSNAGridTeamPolicy = typename Kokkos::TeamPolicy<Device, Kokkos::LaunchBounds<vector_length * num_teams>, TagComputeSNAP>;
+  //using CSNAGridTeamPolicy = typename Kokkos::TeamPolicy<Device, Kokkos::IndexType<int>, Kokkos::IndexType<int>, Kokkos::IndexType<int>, TagComputeSNAP>;
+  //using team_member = typename team_policy::member_type;
+
+  // Custom SnapAoSoATeamPolicy to reduce the verbosity of kernel launches
+  // This hides the LaunchBounds abstraction by hiding the explicit
+  // multiplication by vector length
+  template <class Device, int num_teams, class TagComputeSNAP>
+  using SnapAoSoATeamPolicy = typename Kokkos::TeamPolicy<Device, Kokkos::LaunchBounds<vector_length * num_teams>, TagComputeSNAP>;
+
   ComputeSNAGridKokkos(class LAMMPS *, int, char **);
   ~ComputeSNAGridKokkos() override;
 
   void init() override;
   void compute_array() override;
+
+  // Utility functions for teams
+
+  template<class TagStyle>
+  void check_team_size_for(int, int&);
+
+  template<class TagStyle>
+  void check_team_size_reduce(int, int&);
+
+  // operator function for example team policy
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagCSNAGridTeam, const typename Kokkos::TeamPolicy<DeviceType, TagCSNAGridTeam>::member_type& team) const;
 
   KOKKOS_INLINE_FUNCTION
   void operator() (TagComputeSNAGridLoop, const int& ) const;
@@ -128,23 +169,55 @@ class ComputeSNAGridKokkos : public ComputeSNAGrid {
   KOKKOS_INLINE_FUNCTION
   void operator() (TagComputeSNAGridLoopCPU, const int&) const;
 
- private:
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagCSNAGridComputeNeigh,const typename Kokkos::TeamPolicy<DeviceType, TagCSNAGridComputeNeigh>::member_type& team) const;
+
+  // 3D case - used by parallel_for
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagComputeSNAGrid3D, const int& iz, const int& iy, const int& ix) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagCSNAGridPreUi,const int iatom_mod, const int j, const int iatom_div) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagCSNAGridComputeCayleyKlein, const int iatom_mod, const int jnbor, const int iatom_div) const;
+
+ protected:
 
   SNAKokkos<DeviceType, real_type, vector_length> snaKK;
 
   int chunk_size, chunk_offset;
   int host_flag;
+  int ntotal;
+  int total_range; // total number of loop iterations in grid
+  int zlen; //= nzhi-nzlo+1;
+  int ylen; //= nyhi-nylo+1;
+  int xlen; //= nxhi-nxlo+1;
+
+  double cutsq_tmp; // temporary cutsq until we get a view
 
   Kokkos::View<real_type*, DeviceType> d_radelem;              // element radii
   Kokkos::View<real_type*, DeviceType> d_wjelem;               // elements weights
   //Kokkos::View<real_type**, Kokkos::LayoutRight, DeviceType> d_coeffelem;           // element bispectrum coefficients
   Kokkos::View<real_type*, DeviceType> d_sinnerelem;           // element inner cutoff midpoint
   Kokkos::View<real_type*, DeviceType> d_dinnerelem;           // element inner cutoff half-width
+  Kokkos::View<T_INT*, DeviceType> d_ninside;                // ninside for all atoms in list
   Kokkos::View<T_INT*, DeviceType> d_map;                    // mapping from atom types to elements
 
+  typedef Kokkos::DualView<F_FLOAT**, DeviceType> tdual_fparams;
+  tdual_fparams k_cutsq;
+  typedef Kokkos::View<const F_FLOAT**, DeviceType,
+      Kokkos::MemoryTraits<Kokkos::RandomAccess> > t_fparams_rnd;
+  t_fparams_rnd rnd_cutsq;
 
   typename AT::t_x_array_randomread x;
   typename AT::t_int_1d_randomread type;
+
+
+  // Utility routine which wraps computing per-team scratch size requirements for
+  // ComputeNeigh, ComputeUi, and ComputeFusedDeidrj
+  template <typename scratch_type>
+  int scratch_size_helper(int values_per_team);
 
 };
 
