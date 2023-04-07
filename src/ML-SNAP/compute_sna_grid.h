@@ -44,6 +44,7 @@ class ComputeSNAGrid : public ComputeGrid {
   int switchinnerflag;
   double *sinnerelem;
   double *dinnerelem;
+  int parallel_thresh;
   class SNA *snaptr;
   double cutmax;
   int quadraticflag;

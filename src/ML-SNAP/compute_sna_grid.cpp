@@ -57,6 +57,7 @@ ComputeSNAGrid::ComputeSNAGrid(LAMMPS *lmp, int narg, char **arg) :
   switchinnerflag = 0;
   nelements = 1;
   chunksize = 32768;
+  parallel_thresh = 8192;
 
   // process required arguments
 

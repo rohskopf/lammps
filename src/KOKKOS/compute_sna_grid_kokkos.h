@@ -63,11 +63,17 @@ struct TagPairSNAPComputeFusedDeidrjLarge{}; // less parallelism, no divergence
 */
 //struct TagPairSNAPPreUi{};
 struct TagCSNAGridComputeNeigh{};
-struct TagCSNAGridPreUi{};
 struct TagCSNAGridComputeCayleyKlein{};
+struct TagCSNAGridPreUi{};
+struct TagCSNAGridComputeUiSmall{}; // more parallelism, more divergence
+struct TagCSNAGridComputeUiLarge{}; // less parallelism, no divergence
+struct TagCSNAGridTransformUi{}; // re-order ulisttot from SoA to AoSoA, zero ylist
+struct TagCSNAGridComputeZi{};
+struct TagCSNAGridComputeBi{};
+
 struct TagComputeSNAGridLoop{};
 struct TagComputeSNAGrid3D{};
-struct TagCSNAGridTeam{};
+//struct TagCSNAGridTeam{};
 
 // CPU backend only
 /*
@@ -160,8 +166,8 @@ class ComputeSNAGridKokkos : public ComputeSNAGrid {
   void check_team_size_reduce(int, int&);
 
   // operator function for example team policy
-  KOKKOS_INLINE_FUNCTION
-  void operator() (TagCSNAGridTeam, const typename Kokkos::TeamPolicy<DeviceType, TagCSNAGridTeam>::member_type& team) const;
+  //KOKKOS_INLINE_FUNCTION
+  //void operator() (TagCSNAGridTeam, const typename Kokkos::TeamPolicy<DeviceType, TagCSNAGridTeam>::member_type& team) const;
 
   KOKKOS_INLINE_FUNCTION
   void operator() (TagComputeSNAGridLoop, const int& ) const;
@@ -177,10 +183,25 @@ class ComputeSNAGridKokkos : public ComputeSNAGrid {
   void operator()(TagComputeSNAGrid3D, const int& iz, const int& iy, const int& ix) const;
 
   KOKKOS_INLINE_FUNCTION
+  void operator() (TagCSNAGridComputeCayleyKlein, const int iatom_mod, const int jnbor, const int iatom_div) const;
+
+  KOKKOS_INLINE_FUNCTION
   void operator() (TagCSNAGridPreUi,const int iatom_mod, const int j, const int iatom_div) const;
 
   KOKKOS_INLINE_FUNCTION
-  void operator() (TagCSNAGridComputeCayleyKlein, const int iatom_mod, const int jnbor, const int iatom_div) const;
+  void operator() (TagCSNAGridComputeUiSmall,const typename Kokkos::TeamPolicy<DeviceType, TagCSNAGridComputeUiSmall>::member_type& team) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagCSNAGridComputeUiLarge,const typename Kokkos::TeamPolicy<DeviceType, TagCSNAGridComputeUiLarge>::member_type& team) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagCSNAGridTransformUi,const int iatom_mod, const int j, const int iatom_div) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagCSNAGridComputeZi,const int iatom_mod, const int idxz, const int iatom_div) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (TagCSNAGridComputeBi,const int iatom_mod, const int idxb, const int iatom_div) const;
 
  protected:
 
@@ -212,6 +233,8 @@ class ComputeSNAGridKokkos : public ComputeSNAGrid {
 
   typename AT::t_x_array_randomread x;
   typename AT::t_int_1d_randomread type;
+
+  //DAT::tdual_float_4d k_gridlocal;
 
 
   // Utility routine which wraps computing per-team scratch size requirements for

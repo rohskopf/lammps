@@ -244,25 +244,106 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::compute_array()
   chunk_size = total_range; 
   printf("%d %d %d\n", chunk_size, team_size_compute_neigh, vector_length);
   // team_size_compute_neigh is defined in `pair_snap_kokkos.h`
-  int scratch_size = scratch_size_helper<int>(team_size_compute_neigh * ntotal);
-  // The following launches `chunk_size` teams, each with `team_size` threads, using a vector length of `vector_length`.
-  typename Kokkos::TeamPolicy<DeviceType, TagCSNAGridTeam> policy_team(chunk_size,team_size_compute_neigh,vector_length);
-  policy_team = policy_team.set_scratch_size(0, Kokkos::PerTeam(scratch_size)); 
-  Kokkos::parallel_for("TeamPolicy",policy_team,*this);
 
 
+  // Pre-compute ceil(chunk_size / vector_length) for code cleanliness
+  const int chunk_size_div = (chunk_size + vector_length - 1) / vector_length;
 
-  //ComputeNeigh
-   
+  //ComputeNeigh 
   {
-    // team_size_compute_neigh is defined in `pair_snap_kokkos.h`
-    //int scratch_size = scratch_size_helper<int>(team_size_compute_neigh * ntotal);
+    int scratch_size = scratch_size_helper<int>(team_size_compute_neigh * ntotal);
 
-    //SnapAoSoATeamPolicy<DeviceType, team_size_compute_neigh, TagCSNAGridComputeNeigh> policy_neigh(chunk_size,team_size_compute_neigh,vector_length);
-    //policy_neigh = policy_neigh.set_scratch_size(0, Kokkos::PerTeam(scratch_size));
-    //Kokkos::parallel_for("ComputeNeigh",policy_neigh,*this);
+    SnapAoSoATeamPolicy<DeviceType, team_size_compute_neigh, TagCSNAGridComputeNeigh> 
+      policy_neigh(chunk_size, team_size_compute_neigh, vector_length);
+    policy_neigh = policy_neigh.set_scratch_size(0, Kokkos::PerTeam(scratch_size));
+    Kokkos::parallel_for("ComputeNeigh",policy_neigh,*this);
   }
- 
+
+  //ComputeCayleyKlein
+  {
+    // tile_size_compute_ck is defined in `compute_sna_grid_kokkos.h`
+    Snap3DRangePolicy<DeviceType, tile_size_compute_ck, TagCSNAGridComputeCayleyKlein>
+      policy_compute_ck({0,0,0}, {vector_length, ntotal, chunk_size_div}, {vector_length, tile_size_compute_ck, 1});
+    Kokkos::parallel_for("ComputeCayleyKlein", policy_compute_ck, *this);
+  }
+
+  //PreUi
+  {
+    // tile_size_pre_ui is defined in `compute_sna_grid_kokkos.h`
+    Snap3DRangePolicy<DeviceType, tile_size_pre_ui, TagCSNAGridPreUi>
+      policy_preui({0,0,0},{vector_length,twojmax+1,chunk_size_div},{vector_length,tile_size_pre_ui,1});
+    Kokkos::parallel_for("PreUi",policy_preui,*this);
+  }
+
+  // ComputeUi w/ vector parallelism, shared memory, direct atomicAdd into ulisttot
+  {
+    // team_size_compute_ui is defined in `compute_sna_grid_kokkos.h`
+    // scratch size: 32 atoms * (twojmax+1) cached values, no double buffer
+    const int tile_size = vector_length * (twojmax + 1);
+    const int scratch_size = scratch_size_helper<complex>(team_size_compute_ui * tile_size);
+
+    if (chunk_size < parallel_thresh)
+    {
+      // Version with parallelism over j_bend
+
+      // total number of teams needed: (natoms / 32) * (ntotal) * ("bend" locations)
+      const int n_teams = chunk_size_div * ntotal * (twojmax + 1);
+      const int n_teams_div = (n_teams + team_size_compute_ui - 1) / team_size_compute_ui;
+
+      SnapAoSoATeamPolicy<DeviceType, team_size_compute_ui, TagCSNAGridComputeUiSmall>
+        policy_ui(n_teams_div, team_size_compute_ui, vector_length);
+      policy_ui = policy_ui.set_scratch_size(0, Kokkos::PerTeam(scratch_size));
+      Kokkos::parallel_for("ComputeUiSmall", policy_ui, *this);
+    } else {
+      // Version w/out parallelism  over j_bend
+
+      // total number of teams needed: (natoms / 32) * (ntotal)
+      const int n_teams = chunk_size_div * ntotal;
+      const int n_teams_div = (n_teams + team_size_compute_ui - 1) / team_size_compute_ui;
+
+      SnapAoSoATeamPolicy<DeviceType, team_size_compute_ui, TagCSNAGridComputeUiLarge>
+        policy_ui(n_teams_div, team_size_compute_ui, vector_length);
+      policy_ui = policy_ui.set_scratch_size(0, Kokkos::PerTeam(scratch_size));
+      Kokkos::parallel_for("ComputeUiLarge", policy_ui, *this);
+    }
+  }
+
+  //TransformUi: un-"fold" ulisttot, zero ylist
+  {
+    // team_size_transform_ui is defined in `pair_snap_kokkos.h`
+    Snap3DRangePolicy<DeviceType, tile_size_transform_ui, TagCSNAGridTransformUi>
+        policy_transform_ui({0,0,0},{vector_length,snaKK.idxu_max,chunk_size_div},{vector_length,tile_size_transform_ui,1});
+    Kokkos::parallel_for("TransformUi",policy_transform_ui,*this);
+  }
+
+  //Compute bispectrum in AoSoA data layout, transform Bi
+  //if (quadraticflag || eflag) {
+
+  //ComputeZi
+  const int idxz_max = snaKK.idxz_max;
+  Snap3DRangePolicy<DeviceType, tile_size_compute_zi, TagCSNAGridComputeZi>
+      policy_compute_zi({0,0,0},{vector_length,idxz_max,chunk_size_div},{vector_length,tile_size_compute_zi,1});
+  Kokkos::parallel_for("ComputeZi",policy_compute_zi,*this);
+
+  //ComputeBi
+  const int idxb_max = snaKK.idxb_max;
+  Snap3DRangePolicy<DeviceType, tile_size_compute_bi, TagCSNAGridComputeBi>
+      policy_compute_bi({0,0,0},{vector_length,idxb_max,chunk_size_div},{vector_length,tile_size_compute_bi,1});
+  Kokkos::parallel_for("ComputeBi",policy_compute_bi,*this);
+
+  //Looks like best way to grab blist is in a parallel_for
+
+  //Transform data layout of blist out of AoSoA
+  //We need this because `blist` gets used in ComputeForce which doesn't
+  //take advantage of AoSoA, which at best would only be beneficial on the margins
+  //NOTE: Do we need this in compute sna/grid/kk?
+  /*
+  Snap3DRangePolicy<DeviceType, tile_size_transform_bi, TagPairSNAPTransformBi>
+      policy_transform_bi({0,0,0},{vector_length,idxb_max,chunk_size_div},{vector_length,tile_size_transform_bi,1});
+  Kokkos::parallel_for("TransformBi",policy_transform_bi,*this);
+  */
+
+
 
   // let's try a simple parallel for loop
   // NOTE: We get the compiler error calling host function DeviceType::in_parallel() in this 
@@ -312,7 +393,7 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::compute_array()
  */
 template<class DeviceType, typename real_type, int vector_length>
 KOKKOS_INLINE_FUNCTION
-void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridTeam,const typename Kokkos::TeamPolicy<DeviceType,TagCSNAGridTeam>::member_type& team) const {
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridComputeNeigh,const typename Kokkos::TeamPolicy<DeviceType,TagCSNAGridComputeNeigh>::member_type& team) const {
 
   // this function is following the same procedure in ComputeNeigh of PairSNAPKokkos
 
@@ -432,7 +513,7 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (Tag
 
   }, ninside);
 
-  printf("ninside: %d\n", ninside);
+  //printf("ninside: %d\n", ninside);
 
   d_ninside(ii) = ninside;
 
@@ -468,74 +549,13 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (Tag
   });
 }
 
-template<class DeviceType, typename real_type, int vector_length>
-KOKKOS_INLINE_FUNCTION
-void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagComputeSNAGridLoop,const int& asdf) const {
-  //printf("inside parallel for\n");
-  printf("%d\n", asdf);
-
-  /*
-  typename Kokkos::RangePolicy<DeviceType,TagComputeSNAGridLoop> policy_loop(0,2);
-  Kokkos::parallel_for("Loop",policy_loop,*this);
-  */
-
-}
-
-template<class DeviceType, typename real_type, int vector_length>
-KOKKOS_INLINE_FUNCTION
-void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagComputeSNAGrid3D,const int& iz, const int& iy, const int& ix) const {
-  //printf("inside parallel for\n");
-  printf("^^^ ix iy iz: %d %d %d\n", ix, iy, iz);
-
-  // Let's try to do calculations inside here and see what happens.
-
-  if (host_flag){
-
-  } else { // GPU
-
-#ifdef LMP_KOKKOS_GPU
-
-    // Pre-compute ceil(chunk_size / vector_length) for code cleanliness
-    const int chunk_size_div = (chunk_size + vector_length - 1) / vector_length;
-    //printf("^^^ ComputeSNAGrid3D chunk_size_div: %d\n", chunk_size_div);
-    //ComputeCayleyKlein
-    {
-      //printf("^^^ inside bracket\n");
-
-      if (DeviceType::in_parallel()) {
-        printf("operator() of TagComputeSNAGrid3D is a host function\n");
-      } else {
-        printf("operator() of TagComputeSNAGrid3D is not a host function\n");
-      }
-  
-      // This returns true:
-      //auto test = std::is_same<DeviceType,LMPDeviceType>::value;
-      //printf("%d\n", test);
-
-      // tile_size_compute_ck is defined in `compute_sna_grid_kokkos.h`
-      // The policy constructors are host functions so this raises compiler warning and also 
-      // isnt allowed... we should use teams.
-      /* 
-      Snap3DRangePolicy<DeviceType, tile_size_compute_ck, TagCSNAGridComputeCayleyKlein>
-          policy_compute_ck({0,0,0},{vector_length,ntotal,chunk_size_div},{vector_length,tile_size_compute_ck,1});
-      printf("^^^ begin parallel_for\n");
-      Kokkos::parallel_for("ComputeCayleyKlein",policy_compute_ck,*this);
-      */
-      
-    }
-#endif // LMP_KOKKOS_GPU
-
-  }
-  
-
-}
 
 template<class DeviceType, typename real_type, int vector_length>
 KOKKOS_INLINE_FUNCTION
 void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridComputeCayleyKlein,const int iatom_mod, const int jnbor, const int iatom_div) const {
   SNAKokkos<DeviceType, real_type, vector_length> my_sna = snaKK;
 
-  printf("^^^ ComputeCayleyKlein\n");
+  //printf("^^^ ComputeCayleyKlein\n");
 
   /*
   if (DeviceType::in_parallel()) {
@@ -570,10 +590,123 @@ void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (Tag
 
 template<class DeviceType, typename real_type, int vector_length>
 KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridComputeUiSmall,const typename Kokkos::TeamPolicy<DeviceType,TagCSNAGridComputeUiSmall>::member_type& team) const {
+  SNAKokkos<DeviceType, real_type, vector_length> my_sna = snaKK;
+
+  // extract flattened atom_div / neighbor number / bend_location
+  int flattened_idx = team.team_rank() + team.league_rank() * team_size_compute_ui;
+
+  // extract neighbor index, iatom_div
+  int iatom_div = flattened_idx / (ntotal * (twojmax + 1)); // removed "const" to work around GCC 7 bug
+  const int jj_jbend = flattened_idx - iatom_div * (ntotal * (twojmax + 1));
+  const int jbend = jj_jbend / ntotal;
+  int jj = jj_jbend - jbend * ntotal; // removed "const" to work around GCC 7 bug
+
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, vector_length),
+    [&] (const int iatom_mod) {
+    const int ii = iatom_mod + vector_length * iatom_div;
+    if (ii >= chunk_size) return;
+
+    const int ninside = d_ninside(ii);
+    if (jj >= ninside) return;
+
+    my_sna.compute_ui_small(team, iatom_mod, jbend, jj, iatom_div);
+  });
+
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridComputeUiLarge,const typename Kokkos::TeamPolicy<DeviceType,TagCSNAGridComputeUiLarge>::member_type& team) const {
+  SNAKokkos<DeviceType, real_type, vector_length> my_sna = snaKK;
+
+  // extract flattened atom_div / neighbor number / bend location
+  int flattened_idx = team.team_rank() + team.league_rank() * team_size_compute_ui;
+
+  // extract neighbor index, iatom_div
+  int iatom_div = flattened_idx / ntotal; // removed "const" to work around GCC 7 bug
+  int jj = flattened_idx - iatom_div * ntotal;
+
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, vector_length),
+    [&] (const int iatom_mod) {
+    const int ii = iatom_mod + vector_length * iatom_div;
+    if (ii >= chunk_size) return;
+
+    const int ninside = d_ninside(ii);
+    if (jj >= ninside) return;
+
+    my_sna.compute_ui_large(team,iatom_mod, jj, iatom_div);
+  });
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridTransformUi,const int iatom_mod, const int idxu, const int iatom_div) const {
+  SNAKokkos<DeviceType, real_type, vector_length> my_sna = snaKK;
+
+  const int iatom = iatom_mod + iatom_div * vector_length;
+  if (iatom >= chunk_size) return;
+
+  if (idxu > my_sna.idxu_max) return;
+
+  int elem_count = chemflag ? nelements : 1;
+
+  for (int ielem = 0; ielem < elem_count; ielem++){
+
+    const FullHalfMapper mapper = my_sna.idxu_full_half[idxu];
+
+    auto utot_re = my_sna.ulisttot_re_pack(iatom_mod, mapper.idxu_half, ielem, iatom_div);
+    auto utot_im = my_sna.ulisttot_im_pack(iatom_mod, mapper.idxu_half, ielem, iatom_div);
+
+    if (mapper.flip_sign == 1){
+      utot_im = -utot_im;
+    } else if (mapper.flip_sign == -1){
+      utot_re = -utot_re;
+    }
+
+    my_sna.ulisttot_pack(iatom_mod, idxu, ielem, iatom_div) = { utot_re, utot_im };
+
+    if (mapper.flip_sign == 0) {
+      my_sna.ylist_pack_re(iatom_mod, mapper.idxu_half, ielem, iatom_div) = 0.;
+      my_sna.ylist_pack_im(iatom_mod, mapper.idxu_half, ielem, iatom_div) = 0.;
+    }
+  }
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridComputeZi,const int iatom_mod, const int jjz, const int iatom_div) const {
+  SNAKokkos<DeviceType, real_type, vector_length> my_sna = snaKK;
+
+  const int iatom = iatom_mod + iatom_div * vector_length;
+  if (iatom >= chunk_size) return;
+
+  if (jjz >= my_sna.idxz_max) return;
+
+  my_sna.compute_zi(iatom_mod,jjz,iatom_div);
+}
+
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
+void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridComputeBi,const int iatom_mod, const int jjb, const int iatom_div) const {
+  SNAKokkos<DeviceType, real_type, vector_length> my_sna = snaKK;
+
+  const int iatom = iatom_mod + iatom_div * vector_length;
+  if (iatom >= chunk_size) return;
+
+  if (jjb >= my_sna.idxb_max) return;
+
+  my_sna.compute_bi(iatom_mod,jjb,iatom_div);
+}
+
+/*
+template<class DeviceType, typename real_type, int vector_length>
+KOKKOS_INLINE_FUNCTION
 void ComputeSNAGridKokkos<DeviceType, real_type, vector_length>::operator() (TagCSNAGridComputeNeigh,const typename Kokkos::TeamPolicy<DeviceType,TagCSNAGridComputeNeigh>::member_type& team) const {
 
 
 }
+*/
 
 /* ----------------------------------------------------------------------
    Begin routines that are unique to the CPU codepath. These do not take
